@@ -86,10 +86,17 @@ export async function saveVideoData(videoData, categoryId) {
       ]);
       
       // 保存剧集信息
-      await saveEpisodesData(videoId, safeData, videoData);
+      const episodesSaved = await saveEpisodesData(videoId, safeData, videoData);
+      
+      if (episodesSaved) {
+        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) + 剧集`);
+      } else {
+        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType})`);
+      }
+    } else {
+      console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType})`);
     }
     
-    console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType})`);
     return true;
     
   } catch (error) {
@@ -98,45 +105,52 @@ export async function saveVideoData(videoData, categoryId) {
   }
 }
 
-// 保存剧集数据
+// 保存剧集数据 - 修复版本，正确解析 extraData
 async function saveEpisodesData(videoId, safeData, originalData) {
   try {
     let episodes = [];
     const videoPid = safeData.pID;
     const videoType = safeData.videoType;
     
-    console.log(`📋 处理剧集: ${safeData.name}, 类型: ${videoType}, 总集数: ${safeData.totalEpisodes}`);
+    console.log(`📋 处理剧集: ${safeData.name}, 类型: ${videoType}, updateEP: ${safeData.updateEP}`);
     
-    // 电影：只创建一个剧集
-    if (videoType === 'movie') {
-      episodes.push({
-        episodeId: videoPid,
-        episodeName: '正片',
-        episodeIndex: 1
+    // 方式1: 从 extraData.episodes 获取剧集ID
+    if (originalData.extraData && originalData.extraData.episodes && Array.isArray(originalData.extraData.episodes)) {
+      const episodeIds = originalData.extraData.episodes;
+      console.log(`  从 extraData 获取 ${episodeIds.length} 个剧集ID`);
+      
+      episodes = episodeIds.map((episodeId, index) => {
+        // 尝试从 episodeList 获取剧集名称
+        let episodeName = `第${index + 1}集`;
+        if (originalData.extraData.episodeList && originalData.extraData.episodeList[index]) {
+          const episodeInfo = originalData.extraData.episodeList[index];
+          // 清理名称，移除《》和视频名称
+          episodeName = episodeInfo.name
+            .replace(/《[^》]*》/, '')
+            .replace(safeData.name, '')
+            .trim() || `第${index + 1}集`;
+        }
+        
+        return {
+          episodeId: episodeId,
+          episodeName: episodeName,
+          episodeIndex: index + 1
+        };
       });
     }
-    // 电视剧、动漫等多集内容：创建多个剧集
+    // 方式2: 从 updateEP 推断集数（电视剧/动漫）
     else if (videoType === 'tv' || videoType === 'anime') {
-      // 方式1: 有明确的剧集ID
-      if (originalData.epsID && Array.isArray(originalData.epsID) && originalData.epsID.length > 0) {
-        episodes = originalData.epsID.map((episodeId, index) => ({
-          episodeId: episodeId,
-          episodeName: `第${index + 1}集`,
-          episodeIndex: index + 1
-        }));
-      }
-      // 方式2: 根据总集数创建
-      else if (safeData.totalEpisodes > 1) {
-        for (let i = 0; i < safeData.totalEpisodes; i++) {
+      const totalEpisodes = safeData.totalEpisodes;
+      if (totalEpisodes > 1) {
+        console.log(`  根据总集数创建 ${totalEpisodes} 个剧集`);
+        for (let i = 0; i < totalEpisodes; i++) {
           episodes.push({
             episodeId: `${videoPid}_${i + 1}`,
             episodeName: `第${i + 1}集`,
             episodeIndex: i + 1
           });
         }
-      }
-      // 方式3: 单集电视剧
-      else {
+      } else {
         episodes.push({
           episodeId: videoPid,
           episodeName: '第1集',
@@ -144,11 +158,11 @@ async function saveEpisodesData(videoId, safeData, originalData) {
         });
       }
     }
-    // 综艺、纪实、少儿等：创建单集
+    // 方式3: 电影和其他类型
     else {
       episodes.push({
         episodeId: videoPid,
-        episodeName: '全集',
+        episodeName: videoType === 'movie' ? '正片' : '全集',
         episodeIndex: 1
       });
     }
@@ -162,16 +176,19 @@ async function saveEpisodesData(videoId, safeData, originalData) {
           (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
           VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
         `, [videoId, episode.episodeId, episode.episodeName, episode.episodeIndex]);
+        
         savedCount++;
       } catch (episodeError) {
         console.error(`  保存剧集失败 ${episode.episodeName}:`, episodeError.message);
       }
     }
     
-    console.log(`🎬 成功保存 ${savedCount}/${episodes.length} 个剧集`);
+    console.log(`🎬 成功保存 ${savedCount} 个剧集`);
+    return savedCount > 0;
     
   } catch (error) {
     console.error('❌ 保存剧集失败:', error.message);
+    return false;
   }
 }
 
