@@ -26,12 +26,18 @@ async function checkStatus() {
     
     console.log('各分类视频统计:');
     
-    // 调试：查看返回的数据结构
-    console.log('查询结果结构:', JSON.stringify(categoriesResult, null, 2).substring(0, 500));
-    
-    if (categoriesResult && categoriesResult.length > 0 && categoriesResult[0].results) {
-      categoriesResult[0].results.forEach(cat => {
-        console.log(`  ${cat.name} (${cat.cid}): ${cat.video_count} 个视频 - 状态: ${cat.status}`);
+    // 正确的数据结构访问
+    if (categoriesResult && categoriesResult.result && categoriesResult.result[0] && categoriesResult.result[0].results) {
+      const categories = categoriesResult.result[0].results;
+      categories.forEach(cat => {
+        const statusIcon = cat.status === 'completed' ? '✅' : 
+                          cat.status === 'syncing' ? '🔄' : 
+                          cat.status === 'error' ? '❌' : '⚪';
+        console.log(`  ${statusIcon} ${cat.name} (${cat.cid}): ${cat.video_count} 个视频`);
+        console.log(`     状态: ${cat.status} | 最后同步: ${cat.last_sync || '从未'}`);
+        if (cat.total_pages) {
+          console.log(`     同步页数: ${cat.last_page || 0}/${cat.total_pages}`);
+        }
       });
     } else {
       console.log('  没有找到分类数据');
@@ -39,11 +45,10 @@ async function checkStatus() {
     
     // 获取视频总数 - 修复查询
     const totalResult = await executeSQL('SELECT COUNT(*) as total FROM videos');
-    console.log('总数查询结果:', JSON.stringify(totalResult, null, 2));
-    
     let totalVideos = 0;
-    if (totalResult && totalResult.length > 0 && totalResult[0].results && totalResult[0].results.length > 0) {
-      totalVideos = totalResult[0].results[0].total;
+    
+    if (totalResult && totalResult.result && totalResult.result[0] && totalResult.result[0].results && totalResult.result[0].results.length > 0) {
+      totalVideos = totalResult.result[0].results[0].total;
     }
     
     console.log(`\n📈 视频总计: ${totalVideos} 个`);
@@ -55,10 +60,29 @@ async function checkStatus() {
       GROUP BY status
     `);
     
-    if (syncStats && syncStats.length > 0 && syncStats[0].results) {
+    if (syncStats && syncStats.result && syncStats.result[0] && syncStats.result[0].results) {
       console.log('\n🔄 同步状态统计:');
-      syncStats[0].results.forEach(stat => {
-        console.log(`  ${stat.status}: ${stat.count} 个分类`);
+      syncStats.result[0].results.forEach(stat => {
+        const icon = stat.status === 'completed' ? '✅' : 
+                    stat.status === 'syncing' ? '🔄' : 
+                    stat.status === 'error' ? '❌' : '⚪';
+        console.log(`  ${icon} ${stat.status}: ${stat.count} 个分类`);
+      });
+    }
+    
+    // 显示最近同步的分类
+    const recentSync = await executeSQL(`
+      SELECT category_id, status, last_sync, sync_type 
+      FROM sync_status 
+      WHERE last_sync IS NOT NULL 
+      ORDER BY last_sync DESC 
+      LIMIT 3
+    `);
+    
+    if (recentSync && recentSync.result && recentSync.result[0] && recentSync.result[0].results) {
+      console.log('\n⏰ 最近同步的分类:');
+      recentSync.result[0].results.forEach(sync => {
+        console.log(`  ${sync.category_id}: ${sync.sync_type} 同步 - ${sync.last_sync}`);
       });
     }
     
