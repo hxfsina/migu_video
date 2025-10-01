@@ -1,4 +1,3 @@
-
 import { executeSQL, checkEnv } from './db.js';
 
 async function checkStatus() {
@@ -27,7 +26,6 @@ async function checkStatus() {
     
     console.log('各分类视频统计:');
     
-    // 正确的数据结构访问
     if (categoriesResult && categoriesResult.result && categoriesResult.result[0] && categoriesResult.result[0].results) {
       const categories = categoriesResult.result[0].results;
       categories.forEach(cat => {
@@ -44,7 +42,7 @@ async function checkStatus() {
       console.log('  没有找到分类数据');
     }
     
-    // 获取视频总数 - 修复查询
+    // 获取视频总数
     const totalResult = await executeSQL('SELECT COUNT(*) as total FROM videos');
     let totalVideos = 0;
     
@@ -53,13 +51,24 @@ async function checkStatus() {
     }
     
     console.log(`\n📈 视频总计: ${totalVideos} 个`);
-
-    // 在 status.js 中添加剧集统计：
-const episodeStats = await executeSQL(`
-  SELECT COUNT(*) as total_episodes, COUNT(DISTINCT video_id) as videos_with_episodes
-  FROM episodes
-`);
-console.log(`剧集统计: ${episodeStats[0]?.results?.[0]?.total_episodes} 个剧集, ${episodeStats[0]?.results?.[0]?.videos_with_episodes} 个视频有剧集`);
+    
+    // 修复剧集统计查询
+    const episodeStats = await executeSQL(`
+      SELECT 
+        COUNT(*) as total_episodes,
+        COUNT(DISTINCT video_id) as videos_with_episodes
+      FROM episodes
+    `);
+    
+    let totalEpisodes = 0;
+    let videosWithEpisodes = 0;
+    
+    if (episodeStats && episodeStats.result && episodeStats.result[0] && episodeStats.result[0].results && episodeStats.result[0].results.length > 0) {
+      totalEpisodes = episodeStats.result[0].results[0].total_episodes || 0;
+      videosWithEpisodes = episodeStats.result[0].results[0].videos_with_episodes || 0;
+    }
+    
+    console.log(`🎬 剧集统计: ${totalEpisodes} 个剧集, ${videosWithEpisodes} 个视频有剧集`);
     
     // 获取同步状态统计
     const syncStats = await executeSQL(`
@@ -92,6 +101,23 @@ console.log(`剧集统计: ${episodeStats[0]?.results?.[0]?.total_episodes} 个�
       recentSync.result[0].results.forEach(sync => {
         console.log(`  ${sync.category_id}: ${sync.sync_type} 同步 - ${sync.last_sync}`);
       });
+    }
+    
+    // 新增：检查剧集数据样例
+    const episodeSample = await executeSQL(`
+      SELECT e.*, v.name as video_name 
+      FROM episodes e
+      LEFT JOIN videos v ON e.video_id = v.id
+      LIMIT 3
+    `);
+    
+    if (episodeSample && episodeSample.result && episodeSample.result[0] && episodeSample.result[0].results && episodeSample.result[0].results.length > 0) {
+      console.log('\n📺 剧集数据样例:');
+      episodeSample.result[0].results.forEach(episode => {
+        console.log(`  ${episode.video_name} - ${episode.episode_name} (ID: ${episode.episode_id})`);
+      });
+    } else {
+      console.log('\n❌ 没有找到剧集数据，可能需要检查剧集保存逻辑');
     }
     
   } catch (error) {
