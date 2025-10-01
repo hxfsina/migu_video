@@ -4,7 +4,7 @@ import { fetchMiguCategory, saveVideoData } from './migu-api.js';
 async function fullSyncAllCategories() {
   checkEnv();
   
-  const pageLimit = parseInt(process.env.SYNC_PAGE_LIMIT) || 1;
+  const pageLimit = parseInt(process.env.SYNC_PAGE_LIMIT) || 0;
   const delayMs = parseInt(process.env.SYNC_DELAY_MS) || 2000;
   
   // 根据 pageLimit 决定同步模式
