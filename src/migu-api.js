@@ -1,3 +1,6 @@
+import fetch from 'node-fetch';
+import { executeSQL } from './db.js';
+
 // 从咪咕API获取分类数据
 export async function fetchMiguCategory(cid, page, pageSize) {
   const apiBase = 'https://jadeite.migu.cn';
@@ -38,4 +41,139 @@ export async function fetchMiguCategory(cid, page, pageSize) {
     console.error(`❌ 获取分类 ${cid} 第 ${page} 页数据失败:`, error.message);
     return [];
   }
+}
+
+// 保存视频数据
+export async function saveVideoData(videoData, categoryId) {  // 确保这里有 export
+  try {
+    const safeData = prepareVideoData(videoData, categoryId);
+    const bindParams = getVideoBindParams(safeData);
+    
+    await executeSQL(`
+      INSERT OR REPLACE INTO videos (
+        p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
+        program_type, cont_display_type, cont_display_name, cont_type,
+        score, year, area, language, director, actor,
+        content_style, vod_remarks, update_ep, total_episodes, 
+        is_4k, is_original, way, auth, asset_id, 
+        publish_time, publish_timestamp, recommendation, extra_data,
+        source_publish_time, source_publish_timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, bindParams);
+    
+    const result = await executeSQL(
+      'SELECT id FROM videos WHERE p_id = ?',
+      [safeData.pID]
+    );
+    
+    const videoId = result[0]?.results?.[0]?.id;
+    
+    if (videoId) {
+      await executeSQL(`
+        INSERT OR REPLACE INTO search_index (video_id, name, sub_title, director, actor, content_style)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [
+        videoId, 
+        safeData.name, 
+        safeData.subTitle, 
+        safeData.director, 
+        safeData.actor, 
+        safeData.contentStyle
+      ]);
+    }
+    
+    console.log(`✅ 保存视频成功: ${safeData.name}`);
+    return true;
+    
+  } catch (error) {
+    console.error(`❌ 保存视频失败:`, error.message);
+    return false;
+  }
+}
+
+function prepareVideoData(videoData, categoryId) {
+  const safeData = {
+    pID: videoData.pID || 'unknown_' + Date.now(),
+    name: videoData.name || '未知名称',
+    subTitle: videoData.subTitle || '',
+    pics: videoData.pics || {},
+    programType: videoData.programType || '',
+    score: videoData.score || '',
+    year: videoData.year || '',
+    area: videoData.area || '',
+    language: videoData.language || '',
+    director: videoData.director || '',
+    actor: videoData.actor || '',
+    contentStyle: videoData.contentStyle || '',
+    updateEP: videoData.updateEP || '',
+    recommendation: videoData.recommendation || [],
+    publishTime: videoData.publishTime || '',
+    way: videoData.way || '',
+    auth: videoData.auth || '',
+    contDisplayName: videoData.contDisplayName || '',
+    contentType: videoData.contentType || '',
+    assetId: videoData.assetID || videoData.assetId || '',
+    publishTimestamp: videoData.publishTimestamp || '',
+    sourcePublishTime: videoData.publishTime || '',
+    sourcePublishTimestamp: videoData.publishTimestamp || '',
+    contDisplayType: categoryId
+  };
+
+  return safeData;
+}
+
+function getVideoBindParams(safeData) {
+  const picUrl = getHighQualityPic(safeData.pics) || '';
+  const picUrlH = safeData.pics.highResolutionH || safeData.pics.lowResolutionH || '';
+  const picUrlV = safeData.pics.highResolutionV || safeData.pics.lowResolutionV || '';
+  
+  const is4k = safeData.recommendation.includes('4K') ? 1 : 0;
+  const isOriginal = safeData.recommendation.includes('原画') ? 1 : 0;
+
+  let totalEpisodes = 0;
+  if (safeData.updateEP && safeData.updateEP.includes('集全')) {
+    const match = safeData.updateEP.match(/(\d+)集全/);
+    totalEpisodes = match ? parseInt(match[1]) : 0;
+  }
+
+  const recommendationJson = JSON.stringify(safeData.recommendation);
+
+  return [
+    safeData.pID, 
+    safeData.name, 
+    safeData.subTitle, 
+    picUrl,
+    picUrlH,
+    picUrlV,
+    safeData.programType, 
+    safeData.contDisplayType,
+    safeData.contDisplayName,
+    safeData.contentType,
+    safeData.score, 
+    safeData.year, 
+    safeData.area, 
+    safeData.language,
+    safeData.director, 
+    safeData.actor,
+    safeData.contentStyle, 
+    safeData.updateEP,
+    safeData.updateEP,
+    totalEpisodes,
+    is4k, 
+    isOriginal,
+    safeData.way,
+    safeData.auth,
+    safeData.assetId,
+    safeData.publishTime,
+    safeData.publishTimestamp,
+    recommendationJson,
+    '{}',
+    safeData.sourcePublishTime,
+    safeData.sourcePublishTimestamp
+  ];
+}
+
+function getHighQualityPic(pics) {
+  return pics.highResolutionH || pics.lowResolutionH || 
+         pics.highResolutionV || pics.lowResolutionV || '';
 }
