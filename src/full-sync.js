@@ -5,7 +5,7 @@ async function fullSyncAllCategories() {
   checkEnv();
   
   // 直接写死：0=全量，1=测试，其他数字=限制页数
-  const pageLimit = 1; // 0=全量同步所有页面，1=测试模式(1页)，5=最多5页
+  const pageLimit = 0; // 0=全量同步所有页面，1=测试模式(1页)，5=最多5页
   const delayMs = 2000;
   
   // 根据 pageLimit 决定同步模式
