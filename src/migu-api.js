@@ -63,13 +63,22 @@ export async function saveVideoData(videoData, categoryId) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, bindParams);
     
-    // 获取视频ID
+    // 修复：正确获取视频ID
     const result = await executeSQL(
       'SELECT id FROM videos WHERE p_id = ?',
       [safeData.pID]
     );
     
-    const videoId = result[0]?.results?.[0]?.id;
+    console.log('🔍 视频ID查询结果:', JSON.stringify(result, null, 2));
+    
+    let videoId = null;
+    
+    // 正确处理 D1 返回的数据结构
+    if (result && result.result && result.result[0] && result.result[0].results && result.result[0].results.length > 0) {
+      videoId = result.result[0].results[0].id;
+    }
+    
+    console.log(`🔍 获取到的视频ID: ${videoId}`);
     
     if (videoId) {
       // 保存搜索索引
@@ -85,15 +94,17 @@ export async function saveVideoData(videoData, categoryId) {
         safeData.contentStyle
       ]);
       
+      console.log(`🔍 开始保存剧集数据...`);
       // 保存剧集信息
       const episodesSaved = await saveEpisodesData(videoId, safeData, videoData);
       
       if (episodesSaved) {
         console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) + 剧集`);
       } else {
-        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType})`);
+        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) - 剧集保存失败`);
       }
     } else {
+      console.log(`❌ 无法获取视频ID，跳过剧集保存: ${safeData.name}`);
       console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType})`);
     }
     
@@ -105,9 +116,11 @@ export async function saveVideoData(videoData, categoryId) {
   }
 }
 
-// 保存剧集数据 - 修复版本，正确解析 extraData
+// 保存剧集数据 - 添加详细调试
 async function saveEpisodesData(videoId, safeData, originalData) {
   try {
+    console.log(`🎬 开始处理剧集，videoId: ${videoId}, 视频: ${safeData.name}`);
+    
     let episodes = [];
     const videoPid = safeData.pID;
     const videoType = safeData.videoType;
@@ -167,23 +180,27 @@ async function saveEpisodesData(videoId, safeData, originalData) {
       });
     }
     
+    console.log(`📝 准备保存 ${episodes.length} 个剧集`);
+    
     // 保存剧集到数据库
     let savedCount = 0;
     for (const episode of episodes) {
       try {
-        await executeSQL(`
+        console.log(`  保存剧集: ${episode.episodeName} (ID: ${episode.episodeId})`);
+        const result = await executeSQL(`
           INSERT OR REPLACE INTO episodes 
           (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
           VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
         `, [videoId, episode.episodeId, episode.episodeName, episode.episodeIndex]);
         
+        console.log(`    ✅ 剧集保存成功`);
         savedCount++;
       } catch (episodeError) {
-        console.error(`  保存剧集失败 ${episode.episodeName}:`, episodeError.message);
+        console.error(`   ❌ 保存剧集失败 ${episode.episodeName}:`, episodeError.message);
       }
     }
     
-    console.log(`🎬 成功保存 ${savedCount} 个剧集`);
+    console.log(`🎬 成功保存 ${savedCount}/${episodes.length} 个剧集`);
     return savedCount > 0;
     
   } catch (error) {
