@@ -5,14 +5,24 @@ async function incrementalSyncAllCategories() {
   checkEnv();
   console.log('开始增量同步所有分类数据');
   
-  const mainCategories = ['1000', '1001', '1005'];
+  // 更新为所有6个分类
+  const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
+  const categoryNames = {
+    '1000': '电影',
+    '1001': '电视剧', 
+    '1005': '综艺',
+    '1002': '纪实',
+    '1007': '动漫',
+    '601382': '少儿'
+  };
   
   let successCount = 0;
   let totalNew = 0;
   let totalUpdated = 0;
   
-  for (const cid of mainCategories) {
-    console.log(`开始增量同步分类: ${cid}`);
+  for (const cid of allCategories) {
+    const categoryName = categoryNames[cid] || cid;
+    console.log(`开始增量同步分类: ${categoryName} (${cid})`);
     
     await executeSQL(`
       UPDATE sync_status 
@@ -79,20 +89,24 @@ async function incrementalSyncAllCategories() {
       successCount++;
       totalNew += newCount;
       totalUpdated += updatedCount;
-      console.log(`分类 ${cid} 增量同步完成: 新增 ${newCount} 个, 更新 ${updatedCount} 个`);
+      console.log(`✅ 分类 ${categoryName} 增量同步完成: 新增 ${newCount} 个, 更新 ${updatedCount} 个`);
       
     } catch (error) {
-      console.error(`分类 ${cid} 增量同步失败:`, error);
+      console.error(`❌ 分类 ${categoryName} 增量同步失败:`, error);
       await executeSQL(`
         UPDATE sync_status SET status = 'error', error_message = ? 
         WHERE category_id = ?
       `, [error.message.substring(0, 500), cid]);
     }
     
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // 分类间延迟
+    if (cid !== allCategories[allCategories.length - 1]) {
+      console.log(`等待 2 秒后开始下一个分类...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
   
-  console.log(`增量同步完成: 成功 ${successCount} 个分类, 新增 ${totalNew} 个视频, 更新 ${totalUpdated} 个视频`);
+  console.log(`🎉 增量同步完成: 成功 ${successCount}/${allCategories.length} 个分类, 新增 ${totalNew} 个视频, 更新 ${totalUpdated} 个视频`);
 }
 
 incrementalSyncAllCategories().catch(console.error);
