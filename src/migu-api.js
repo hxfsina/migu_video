@@ -44,11 +44,12 @@ export async function fetchMiguCategory(cid, page, pageSize) {
 }
 
 // 保存视频数据
-export async function saveVideoData(videoData, categoryId) {  // 确保这里有 export
+export async function saveVideoData(videoData, categoryId) {
   try {
     const safeData = prepareVideoData(videoData, categoryId);
     const bindParams = getVideoBindParams(safeData);
     
+    // 保存视频基本信息
     await executeSQL(`
       INSERT OR REPLACE INTO videos (
         p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
@@ -61,6 +62,7 @@ export async function saveVideoData(videoData, categoryId) {  // 确保这里有
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, bindParams);
     
+    // 获取视频ID
     const result = await executeSQL(
       'SELECT id FROM videos WHERE p_id = ?',
       [safeData.pID]
@@ -69,6 +71,7 @@ export async function saveVideoData(videoData, categoryId) {  // 确保这里有
     const videoId = result[0]?.results?.[0]?.id;
     
     if (videoId) {
+      // 保存搜索索引
       await executeSQL(`
         INSERT OR REPLACE INTO search_index (video_id, name, sub_title, director, actor, content_style)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -80,6 +83,9 @@ export async function saveVideoData(videoData, categoryId) {  // 确保这里有
         safeData.actor, 
         safeData.contentStyle
       ]);
+      
+      // 保存剧集信息
+      await saveEpisodesData(videoId, safeData, videoData);
     }
     
     console.log(`✅ 保存视频成功: ${safeData.name}`);
@@ -88,6 +94,57 @@ export async function saveVideoData(videoData, categoryId) {  // 确保这里有
   } catch (error) {
     console.error(`❌ 保存视频失败:`, error.message);
     return false;
+  }
+}
+
+// 保存剧集数据
+async function saveEpisodesData(videoId, safeData, originalData) {
+  try {
+    // 检查是否有剧集信息
+    let episodes = [];
+    
+    // 方式1: 从 epsID 字段获取剧集
+    if (originalData.epsID && Array.isArray(originalData.epsID) && originalData.epsID.length > 0) {
+      episodes = originalData.epsID.map((episodeId, index) => ({
+        episodeId: episodeId,
+        episodeName: `第${index + 1}集`,
+        episodeIndex: index + 1
+      }));
+    }
+    // 方式2: 从 updateEP 字段推断剧集数
+    else if (safeData.updateEP && safeData.totalEpisodes > 1) {
+      for (let i = 0; i < safeData.totalEpisodes; i++) {
+        episodes.push({
+          episodeId: `${safeData.pID}_${i + 1}`,
+          episodeName: `第${i + 1}集`,
+          episodeIndex: i + 1
+        });
+      }
+    }
+    // 方式3: 单集视频，创建一个默认剧集
+    else {
+      episodes.push({
+        episodeId: safeData.pID,
+        episodeName: '正片',
+        episodeIndex: 1
+      });
+    }
+    
+    // 保存剧集到数据库
+    for (const episode of episodes) {
+      await executeSQL(`
+        INSERT OR REPLACE INTO episodes 
+        (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+      `, [videoId, episode.episodeId, episode.episodeName, episode.episodeIndex]);
+    }
+    
+    if (episodes.length > 0) {
+      console.log(`🎬 保存 ${episodes.length} 个剧集`);
+    }
+    
+  } catch (error) {
+    console.error('❌ 保存剧集失败:', error.message);
   }
 }
 
@@ -134,6 +191,11 @@ function getVideoBindParams(safeData) {
   if (safeData.updateEP && safeData.updateEP.includes('集全')) {
     const match = safeData.updateEP.match(/(\d+)集全/);
     totalEpisodes = match ? parseInt(match[1]) : 0;
+  } else if (safeData.updateEP && safeData.updateEP.includes('更新至')) {
+    const match = safeData.updateEP.match(/更新至(\d+)集/);
+    totalEpisodes = match ? parseInt(match[1]) : 1;
+  } else {
+    totalEpisodes = 1; // 默认为单集
   }
 
   const recommendationJson = JSON.stringify(safeData.recommendation);
