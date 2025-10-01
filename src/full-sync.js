@@ -4,13 +4,21 @@ import { fetchMiguCategory, saveVideoData } from './migu-api.js';
 async function fullSyncAllCategories() {
   checkEnv();
   
-  const pageLimit = parseInt(process.env.SYNC_PAGE_LIMIT) || 0;
-  const delayMs = parseInt(process.env.SYNC_DELAY_MS) || 2000;
+  // 直接写死：0=全量，1=测试，其他数字=限制页数
+  const pageLimit = 0; // 0=全量同步所有页面，1=测试模式(1页)，5=最多5页
+  const delayMs = 2000;
   
   // 根据 pageLimit 决定同步模式
-  const syncMode = pageLimit === 1 ? '测试模式(每类1页)' : '全量模式(同步所有页面)';
-  console.log(`开始全量同步所有分类数据 - ${syncMode}`);
-  console.log(`页数限制: ${pageLimit === 1 ? '1页(测试)' : '无限制(全量)'}`);
+  let syncMode = '';
+  if (pageLimit === 0) {
+    syncMode = '全量模式(所有页面)';
+  } else if (pageLimit === 1) {
+    syncMode = '测试模式(每类1页)';
+  } else {
+    syncMode = `限制模式(最多${pageLimit}页)`;
+  }
+  
+  console.log(`🚀 开始全量同步所有分类数据 - ${syncMode}`);
   
   // 所有6个分类
   const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
@@ -43,7 +51,7 @@ async function fullSyncAllCategories() {
       let hasMoreData = true;
       
       while (hasMoreData) {
-        // 修复逻辑：只有当 pageLimit > 0 且 currentPage > pageLimit 时才停止
+        // 检查页数限制
         if (pageLimit > 0 && currentPage > pageLimit) {
           console.log(`⏹️  达到页数限制 ${pageLimit} 页，停止同步`);
           break;
@@ -73,7 +81,7 @@ async function fullSyncAllCategories() {
         currentPage++;
         totalPages++;
         
-        // 每次请求后延迟，避免过于频繁
+        // 每次请求后延迟
         if (hasMoreData) {
           console.log(`⏳ 等待 ${delayMs}ms 后继续下一页...`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -112,7 +120,7 @@ async function fullSyncAllCategories() {
   console.log(`✅ 成功同步: ${successCount}/${allCategories.length} 个分类`);
   console.log(`📊 总计视频: ${totalVideos} 个`);
   console.log(`📄 总计页面: ${totalPages} 页`);
-  console.log(`🎯 同步模式: ${pageLimit === 1 ? '测试模式(每类1页)' : pageLimit > 1 ? `限制模式(最多${pageLimit}页)` : '全量模式(所有页面)'}`);
+  console.log(`🎯 同步模式: ${syncMode}`);
 }
 
 fullSyncAllCategories().catch(console.error);
