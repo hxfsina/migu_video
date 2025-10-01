@@ -5,15 +5,10 @@ async function incrementalSyncAllCategories() {
   checkEnv();
   console.log('开始增量同步所有分类数据');
   
-  // 所有分类
   const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
   const categoryNames = {
-    '1000': '电影',
-    '1001': '电视剧', 
-    '1005': '综艺',
-    '1002': '纪实',
-    '1007': '动漫',
-    '601382': '少儿'
+    '1000': '电影', '1001': '电视剧', '1005': '综艺',
+    '1002': '纪实', '1007': '动漫', '601382': '少儿'
   };
   
   let successCount = 0;
@@ -32,46 +27,58 @@ async function incrementalSyncAllCategories() {
     `, [cid]);
     
     try {
-      const videos = await fetchMiguCategory(cid, 1, 20);
-      let newCount = 0;
-      let updatedCount = 0;
-      let episodesUpdatedCount = 0;
+      let currentPage = 1;
+      let hasMoreData = true;
+      let categoryNew = 0;
+      let categoryUpdated = 0;
+      let categoryEpisodesUpdated = 0;
       
-      if (videos && videos.length > 0) {
-        console.log(`获取到 ${videos.length} 个视频进行增量比对`);
+      // 获取该分类下所有已存在的视频ID
+      const existingResult = await executeSQL(
+        'SELECT p_id, update_ep, total_episodes FROM videos WHERE cont_display_type = ?',
+        [cid]
+      );
+      
+      const existingVideos = {};
+      if (existingResult && existingResult.result && existingResult.result[0] && existingResult.result[0].results) {
+        existingResult.result[0].results.forEach(video => {
+          existingVideos[video.p_id] = {
+            update_ep: video.update_ep,
+            total_episodes: video.total_episodes
+          };
+        });
+      }
+      
+      console.log(`数据库中已有 ${Object.keys(existingVideos).length} 个 ${categoryName} 视频`);
+      
+      // 遍历所有页面，直到没有数据
+      while (hasMoreData) {
+        console.log(`📄 检查分类 ${categoryName} 第 ${currentPage} 页`);
         
-        // 获取该分类下已存在的视频ID和剧集信息
-        const existingResult = await executeSQL(`
-          SELECT 
-            v.p_id,
-            v.update_ep,
-            v.total_episodes,
-            (SELECT COUNT(*) FROM episodes e WHERE e.video_id = v.id) as current_episodes
-          FROM videos v 
-          WHERE v.cont_display_type = ?
-        `, [cid]);
+        const videos = await fetchMiguCategory(cid, currentPage, 20);
         
-        const existingVideos = {};
-        if (existingResult && existingResult.result && existingResult.result[0] && existingResult.result[0].results) {
-          existingResult.result[0].results.forEach(video => {
-            existingVideos[video.p_id] = {
-              update_ep: video.update_ep,
-              total_episodes: video.total_episodes,
-              current_episodes: video.current_episodes
-            };
-          });
+        // 如果没有数据或数据为空，停止同步
+        if (!videos || videos.length === 0) {
+          console.log(`⏹️  分类 ${categoryName} 第 ${currentPage} 页无数据，停止同步`);
+          hasMoreData = false;
+          break;
         }
         
-        console.log(`数据库中已有 ${Object.keys(existingVideos).length} 个 ${categoryName} 视频`);
+        console.log(`获取到 ${videos.length} 个视频进行增量比对`);
+        
+        let pageNew = 0;
+        let pageUpdated = 0;
+        let pageEpisodesUpdated = 0;
         
         for (const videoData of videos) {
           const videoId = videoData.pID;
           const isNewVideo = !existingVideos[videoId];
           
           if (isNewVideo) {
-            // 新视频 - 保存视频和剧集
+            // 新视频
             await saveVideoData(videoData, cid);
-            newCount++;
+            pageNew++;
+            categoryNew++;
             console.log(`🆕 新增视频: ${videoData.name || '未知'}`);
           } else {
             // 已存在视频 - 检查是否需要更新
@@ -79,20 +86,21 @@ async function incrementalSyncAllCategories() {
             const needsUpdate = checkIfVideoNeedsUpdate(videoData, existingVideo);
             
             if (needsUpdate) {
-              // 更新视频信息和剧集
               await saveVideoData(videoData, cid);
-              updatedCount++;
-              
-              // 检查剧集是否有更新
-              const episodeChanges = await checkEpisodeChanges(videoData, existingVideo);
-              if (episodeChanges) {
-                episodesUpdatedCount++;
-                console.log(`🔄 更新视频和剧集: ${videoData.name || '未知'}`);
-              } else {
-                console.log(`🔄 更新视频信息: ${videoData.name || '未知'}`);
-              }
+              pageUpdated++;
+              categoryUpdated++;
+              console.log(`🔄 更新视频: ${videoData.name || '未知'}`);
             }
           }
+        }
+        
+        console.log(`📊 第 ${currentPage} 页结果: 新增 ${pageNew} 个, 更新 ${pageUpdated} 个`);
+        
+        currentPage++;
+        
+        // 每次请求后延迟，避免过于频繁
+        if (hasMoreData) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
@@ -109,20 +117,19 @@ async function incrementalSyncAllCategories() {
       
       await executeSQL(`
         UPDATE sync_status 
-        SET status = 'completed', last_page = ?, total_videos = ?, 
-            last_sync = datetime('now')
+        SET status = 'completed', total_videos = ?, last_sync = datetime('now')
         WHERE category_id = ?
-      `, [1, totalVideos, cid]);
+      `, [totalVideos, cid]);
       
       successCount++;
-      totalNew += newCount;
-      totalUpdated += updatedCount;
-      totalEpisodesUpdated += episodesUpdatedCount;
+      totalNew += categoryNew;
+      totalUpdated += categoryUpdated;
+      totalEpisodesUpdated += categoryEpisodesUpdated;
       
       console.log(`✅ 分类 ${categoryName} 增量同步完成:`);
-      console.log(`   新增视频: ${newCount} 个`);
-      console.log(`   更新视频: ${updatedCount} 个`);
-      console.log(`   剧集更新: ${episodesUpdatedCount} 个`);
+      console.log(`   新增视频: ${categoryNew} 个`);
+      console.log(`   更新视频: ${categoryUpdated} 个`);
+      console.log(`   检查页数: ${currentPage - 1} 页`);
       
     } catch (error) {
       console.error(`❌ 分类 ${categoryName} 增量同步失败:`, error);
@@ -143,7 +150,6 @@ async function incrementalSyncAllCategories() {
   console.log(`   成功同步: ${successCount}/${allCategories.length} 个分类`);
   console.log(`   新增视频: ${totalNew} 个`);
   console.log(`   更新视频: ${totalUpdated} 个`);
-  console.log(`   剧集更新: ${totalEpisodesUpdated} 个`);
 }
 
 // 检查视频是否需要更新
@@ -156,44 +162,27 @@ function checkIfVideoNeedsUpdate(videoData, existingVideo) {
     return true;
   }
   
-  // 2. 检查其他关键信息变化（可以根据需要扩展）
-  // 比如评分、图片等更新
+  // 可以添加其他检查条件，比如评分、推荐标签等
   
   return false;
 }
 
 // 计算总集数
 function calculateTotalEpisodes(videoData) {
-  let totalEpisodes = 0;
-  if (videoData.updateEP && videoData.updateEP.includes('集全')) {
-    const match = videoData.updateEP.match(/(\d+)集全/);
-    totalEpisodes = match ? parseInt(match[1]) : 0;
-  } else if (videoData.updateEP && videoData.updateEP.includes('更新至')) {
-    const match = videoData.updateEP.match(/更新至(\d+)集/);
-    totalEpisodes = match ? parseInt(match[1]) : 1;
-  } else {
-    totalEpisodes = 1;
-  }
-  return totalEpisodes;
-}
-
-// 检查剧集变化
-async function checkEpisodeChanges(videoData, existingVideo) {
-  const newTotalEpisodes = calculateTotalEpisodes(videoData);
+  const updateEP = videoData.updateEP || '';
   
-  // 如果总集数增加，说明有新的剧集
-  if (newTotalEpisodes > existingVideo.total_episodes) {
-    return true;
+  if (updateEP.includes('集全')) {
+    const match = updateEP.match(/(\d+)集全/);
+    return match ? parseInt(match[1]) : 1;
+  } else if (updateEP.includes('更新至')) {
+    const match = updateEP.match(/更新至(\d+)集/);
+    return match ? parseInt(match[1]) : 1;
+  } else if (updateEP && /\d+集/.test(updateEP)) {
+    const match = updateEP.match(/(\d+)集/);
+    return match ? parseInt(match[1]) : 1;
   }
   
-  // 如果有 epsID 数据且数量变化
-  if (videoData.epsID && Array.isArray(videoData.epsID)) {
-    if (videoData.epsID.length !== existingVideo.current_episodes) {
-      return true;
-    }
-  }
-  
-  return false;
+  return 1;
 }
 
 incrementalSyncAllCategories().catch(console.error);
