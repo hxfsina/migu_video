@@ -1,0 +1,14 @@
+{
+  "name": "migu-sync",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "init": "node src/sync.js init",
+    "full": "node src/sync.js full", 
+    "incremental": "node src/sync.js incremental"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20231025.0",
+    "wrangler": "^3.0.0"
+  }
+}
