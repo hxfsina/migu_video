@@ -1,3 +1,4 @@
+
 import { executeSQL, checkEnv } from './db.js';
 
 async function checkStatus() {
@@ -52,6 +53,13 @@ async function checkStatus() {
     }
     
     console.log(`\n📈 视频总计: ${totalVideos} 个`);
+
+    // 在 status.js 中添加剧集统计：
+const episodeStats = await executeSQL(`
+  SELECT COUNT(*) as total_episodes, COUNT(DISTINCT video_id) as videos_with_episodes
+  FROM episodes
+`);
+console.log(`剧集统计: ${episodeStats[0]?.results?.[0]?.total_episodes} 个剧集, ${episodeStats[0]?.results?.[0]?.videos_with_episodes} 个视频有剧集`);
     
     // 获取同步状态统计
     const syncStats = await executeSQL(`
