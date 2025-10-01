@@ -43,9 +43,9 @@ async function fullSyncAllCategories() {
       let hasMoreData = true;
       
       while (hasMoreData) {
-        // 检查页数限制：如果 pageLimit > 1 则无限制，否则限制为1页
-        if (pageLimit === 1 && currentPage > 1) {
-          console.log(`⏹️  测试模式，只同步第1页，停止同步`);
+        // 修复逻辑：只有当 pageLimit > 0 且 currentPage > pageLimit 时才停止
+        if (pageLimit > 0 && currentPage > pageLimit) {
+          console.log(`⏹️  达到页数限制 ${pageLimit} 页，停止同步`);
           break;
         }
         
@@ -73,8 +73,8 @@ async function fullSyncAllCategories() {
         currentPage++;
         totalPages++;
         
-        // 每次请求后延迟，避免过于频繁（最后一页不需要延迟）
-        if (hasMoreData && (pageLimit !== 1 || currentPage <= 1)) {
+        // 每次请求后延迟，避免过于频繁
+        if (hasMoreData) {
           console.log(`⏳ 等待 ${delayMs}ms 后继续下一页...`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
         }
@@ -112,7 +112,7 @@ async function fullSyncAllCategories() {
   console.log(`✅ 成功同步: ${successCount}/${allCategories.length} 个分类`);
   console.log(`📊 总计视频: ${totalVideos} 个`);
   console.log(`📄 总计页面: ${totalPages} 页`);
-  console.log(`🎯 同步模式: ${pageLimit === 1 ? '测试模式(每类1页)' : '全量模式(所有页面)'}`);
+  console.log(`🎯 同步模式: ${pageLimit === 1 ? '测试模式(每类1页)' : pageLimit > 1 ? `限制模式(最多${pageLimit}页)` : '全量模式(所有页面)'}`);
 }
 
 fullSyncAllCategories().catch(console.error);
