@@ -58,8 +58,9 @@ export async function saveVideoData(videoData, categoryId) {
         content_style, vod_remarks, update_ep, total_episodes, 
         is_4k, is_original, way, auth, asset_id, 
         publish_time, publish_timestamp, recommendation, extra_data,
-        source_publish_time, source_publish_timestamp
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        source_publish_time, source_publish_timestamp,
+        video_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, bindParams);
     
     // 获取视频ID
@@ -88,7 +89,7 @@ export async function saveVideoData(videoData, categoryId) {
       await saveEpisodesData(videoId, safeData, videoData);
     }
     
-    console.log(`✅ 保存视频成功: ${safeData.name}`);
+    console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType})`);
     return true;
     
   } catch (error) {
@@ -100,55 +101,150 @@ export async function saveVideoData(videoData, categoryId) {
 // 保存剧集数据
 async function saveEpisodesData(videoId, safeData, originalData) {
   try {
-    // 检查是否有剧集信息
     let episodes = [];
+    const videoPid = safeData.pID;
+    const videoType = safeData.videoType;
     
-    // 方式1: 从 epsID 字段获取剧集
-    if (originalData.epsID && Array.isArray(originalData.epsID) && originalData.epsID.length > 0) {
-      episodes = originalData.epsID.map((episodeId, index) => ({
-        episodeId: episodeId,
-        episodeName: `第${index + 1}集`,
-        episodeIndex: index + 1
-      }));
+    console.log(`📋 处理剧集: ${safeData.name}, 类型: ${videoType}, 总集数: ${safeData.totalEpisodes}`);
+    
+    // 电影：只创建一个剧集
+    if (videoType === 'movie') {
+      episodes.push({
+        episodeId: videoPid,
+        episodeName: '正片',
+        episodeIndex: 1
+      });
     }
-    // 方式2: 从 updateEP 字段推断剧集数
-    else if (safeData.updateEP && safeData.totalEpisodes > 1) {
-      for (let i = 0; i < safeData.totalEpisodes; i++) {
+    // 电视剧、动漫等多集内容：创建多个剧集
+    else if (videoType === 'tv' || videoType === 'anime') {
+      // 方式1: 有明确的剧集ID
+      if (originalData.epsID && Array.isArray(originalData.epsID) && originalData.epsID.length > 0) {
+        episodes = originalData.epsID.map((episodeId, index) => ({
+          episodeId: episodeId,
+          episodeName: `第${index + 1}集`,
+          episodeIndex: index + 1
+        }));
+      }
+      // 方式2: 根据总集数创建
+      else if (safeData.totalEpisodes > 1) {
+        for (let i = 0; i < safeData.totalEpisodes; i++) {
+          episodes.push({
+            episodeId: `${videoPid}_${i + 1}`,
+            episodeName: `第${i + 1}集`,
+            episodeIndex: i + 1
+          });
+        }
+      }
+      // 方式3: 单集电视剧
+      else {
         episodes.push({
-          episodeId: `${safeData.pID}_${i + 1}`,
-          episodeName: `第${i + 1}集`,
-          episodeIndex: i + 1
+          episodeId: videoPid,
+          episodeName: '第1集',
+          episodeIndex: 1
         });
       }
     }
-    // 方式3: 单集视频，创建一个默认剧集
+    // 综艺、纪实、少儿等：创建单集
     else {
       episodes.push({
-        episodeId: safeData.pID,
-        episodeName: '正片',
+        episodeId: videoPid,
+        episodeName: '全集',
         episodeIndex: 1
       });
     }
     
     // 保存剧集到数据库
+    let savedCount = 0;
     for (const episode of episodes) {
-      await executeSQL(`
-        INSERT OR REPLACE INTO episodes 
-        (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-      `, [videoId, episode.episodeId, episode.episodeName, episode.episodeIndex]);
+      try {
+        await executeSQL(`
+          INSERT OR REPLACE INTO episodes 
+          (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
+          VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+        `, [videoId, episode.episodeId, episode.episodeName, episode.episodeIndex]);
+        savedCount++;
+      } catch (episodeError) {
+        console.error(`  保存剧集失败 ${episode.episodeName}:`, episodeError.message);
+      }
     }
     
-    if (episodes.length > 0) {
-      console.log(`🎬 保存 ${episodes.length} 个剧集`);
-    }
+    console.log(`🎬 成功保存 ${savedCount}/${episodes.length} 个剧集`);
     
   } catch (error) {
     console.error('❌ 保存剧集失败:', error.message);
   }
 }
 
+// 智能判断视频类型
+function determineVideoType(videoData, categoryId) {
+  const updateEP = videoData.updateEP || '';
+  const programType = videoData.programType || '';
+  const name = videoData.name || '';
+  
+  // 1. 根据分类ID初步判断
+  switch(categoryId) {
+    case '1000': return 'movie';      // 电影
+    case '1001': return 'tv';         // 电视剧
+    case '1005': return 'variety';    // 综艺
+    case '1002': return 'documentary'; // 纪实
+    case '1007': return 'anime';      // 动漫
+    case '601382': return 'kids';     // 少儿
+  }
+  
+  // 2. 根据集数信息判断
+  if (updateEP.includes('集全') || updateEP.includes('更新至') || updateEP.includes('第') ) {
+    return 'tv'; // 有多集信息，判定为电视剧
+  }
+  
+  // 3. 根据节目类型判断
+  if (programType.includes('MOVIE') || programType.includes('电影')) {
+    return 'movie';
+  } else if (programType.includes('TV') || programType.includes('剧集')) {
+    return 'tv';
+  }
+  
+  // 4. 根据名称关键词判断
+  const tvKeywords = ['剧', '季', '部', '系列', '连载'];
+  const movieKeywords = ['电影', '剧场版', '大电影'];
+  
+  if (tvKeywords.some(keyword => name.includes(keyword))) {
+    return 'tv';
+  } else if (movieKeywords.some(keyword => name.includes(keyword))) {
+    return 'movie';
+  }
+  
+  // 5. 根据总集数判断
+  const totalEpisodes = calculateTotalEpisodes(videoData);
+  if (totalEpisodes > 1) {
+    return 'tv';
+  }
+  
+  return 'movie'; // 默认判定为电影
+}
+
+// 计算总集数
+function calculateTotalEpisodes(videoData) {
+  const updateEP = videoData.updateEP || '';
+  
+  if (updateEP.includes('集全')) {
+    const match = updateEP.match(/(\d+)集全/);
+    return match ? parseInt(match[1]) : 1;
+  } else if (updateEP.includes('更新至')) {
+    const match = updateEP.match(/更新至(\d+)集/);
+    return match ? parseInt(match[1]) : 1;
+  } else if (updateEP && /\d+集/.test(updateEP)) {
+    const match = updateEP.match(/(\d+)集/);
+    return match ? parseInt(match[1]) : 1;
+  }
+  
+  // 默认为单集
+  return 1;
+}
+
 function prepareVideoData(videoData, categoryId) {
+  // 智能判断视频类型
+  const videoType = determineVideoType(videoData, categoryId);
+  
   const safeData = {
     pID: videoData.pID || 'unknown_' + Date.now(),
     name: videoData.name || '未知名称',
@@ -173,7 +269,9 @@ function prepareVideoData(videoData, categoryId) {
     publishTimestamp: videoData.publishTimestamp || '',
     sourcePublishTime: videoData.publishTime || '',
     sourcePublishTimestamp: videoData.publishTimestamp || '',
-    contDisplayType: categoryId
+    contDisplayType: categoryId,
+    videoType: videoType,
+    totalEpisodes: calculateTotalEpisodes(videoData)
   };
 
   return safeData;
@@ -187,16 +285,7 @@ function getVideoBindParams(safeData) {
   const is4k = safeData.recommendation.includes('4K') ? 1 : 0;
   const isOriginal = safeData.recommendation.includes('原画') ? 1 : 0;
 
-  let totalEpisodes = 0;
-  if (safeData.updateEP && safeData.updateEP.includes('集全')) {
-    const match = safeData.updateEP.match(/(\d+)集全/);
-    totalEpisodes = match ? parseInt(match[1]) : 0;
-  } else if (safeData.updateEP && safeData.updateEP.includes('更新至')) {
-    const match = safeData.updateEP.match(/更新至(\d+)集/);
-    totalEpisodes = match ? parseInt(match[1]) : 1;
-  } else {
-    totalEpisodes = 1; // 默认为单集
-  }
+  let totalEpisodes = safeData.totalEpisodes;
 
   const recommendationJson = JSON.stringify(safeData.recommendation);
 
@@ -231,7 +320,8 @@ function getVideoBindParams(safeData) {
     recommendationJson,
     '{}',
     safeData.sourcePublishTime,
-    safeData.sourcePublishTimestamp
+    safeData.sourcePublishTimestamp,
+    safeData.videoType
   ];
 }
 
