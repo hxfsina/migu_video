@@ -16,16 +16,16 @@ async function initDatabase() {
   await executeSQL(`DELETE FROM sqlite_sequence`);
   console.log('重置自增ID成功');
   
-  // 插入分类数据
-  const categories = [
-    { cid: '1000', name: '电影', description: '电影内容' },
-    { cid: '1001', name: '电视剧', description: '电视剧内容' },
-    { cid: '1005', name: '综艺', description: '综艺节目' },
-    { cid: '1002', name: '纪实', description: '纪实内容' },
-    { cid: '1007', name: '动漫', description: '动漫内容' },
-    { cid: '601382', name: '少儿', description: '少儿内容' },
-    { cid: 'migu_4k', name: '4K专区', description: '4K超清内容' }
-  ];
+  // 在 init.js 的分类数据部分更新为：
+const categories = [
+  { cid: '1000', name: '电影', description: '电影内容' },
+  { cid: '1001', name: '电视剧', description: '电视剧内容' },
+  { cid: '1005', name: '综艺', description: '综艺节目' },
+  { cid: '1002', name: '纪实', description: '纪实内容' },
+  { cid: '1007', name: '动漫', description: '动漫内容' },
+  { cid: '601382', name: '少儿', description: '少儿内容' },
+  { cid: 'migu_4k', name: '4K专区', description: '4K超清内容' }
+];
   
   for (const category of categories) {
     await executeSQL(`
