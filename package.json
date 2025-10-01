@@ -5,7 +5,8 @@
   "scripts": {
     "init": "node src/init.js",
     "full": "node src/full-sync.js", 
-    "incremental": "node src/incremental-sync.js"
+    "incremental": "node src/incremental-sync.js",
+    "status": "node src/status.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2"
