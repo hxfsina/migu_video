@@ -332,10 +332,7 @@ function getVideoBindParams(safeData) {
   const recommendationJson = JSON.stringify(safeData.recommendation);
   
   const extraDataJson = JSON.stringify({
-    wcKeyword: safeData.wcKeyword,
-    playType: safeData.playType,
-    createTime: safeData.createTime,    // 🔥 保存官方上架时间
-    publishDate: safeData.publishDate   // 🔥 保存官方时间戳
+   
   });
 
   return [
@@ -373,7 +370,8 @@ function getVideoBindParams(safeData) {
     safeData.videoType,                 // 32. video_type
     safeData.wcKeyword,                 // 33. wc_keyword
     safeData.playType                   // 34. play_type
-    
+    safeData.createTime,                // 🔥 第35个: create_time
+    safeData.publishDate                // 🔥 第36个: publish_date
   ];
 }
 
