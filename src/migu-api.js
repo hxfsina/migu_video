@@ -310,8 +310,8 @@ function prepareVideoData(videoData, categoryId) {
     playType: videoData.playType || ''     // 播放类型
   };
 
-  console.log(`📊 视频数据: ${safeData.name}`);
-  console.log(`  地区: "${safeData.area}", 关键词: "${safeData.wcKeyword}", 播放类型: "${safeData.playType}"`);
+  //console.log(`📊 视频数据: ${safeData.name}`);
+  //console.log(`  地区: "${safeData.area}", 关键词: "${safeData.wcKeyword}", 播放类型: "${safeData.playType}"`);
 
   return safeData;
 }
