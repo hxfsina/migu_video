@@ -287,11 +287,13 @@ function prepareVideoData(videoData, categoryId) {
     programType: videoData.programType || '',
     score: videoData.score || '',
     year: videoData.year || '',
-    area: videoData.area || '',
+    // 🔥 修复：使用 mediaArea 字段
+    area: videoData.mediaArea || videoData.area || '',
     language: videoData.language || '',
-    director: videoData.director || '',
-    actor: videoData.actor || '',
-    contentStyle: videoData.contentStyle || '',
+    // 🔥 修复：去除前后空格
+    director: (videoData.director || '').trim(),
+    actor: (videoData.actor || '').trim(),
+    contentStyle: (videoData.contentStyle || '').trim(),
     updateEP: videoData.updateEP || '',
     recommendation: videoData.recommendation || [],
     publishTime: videoData.publishTime || '',
@@ -305,8 +307,15 @@ function prepareVideoData(videoData, categoryId) {
     sourcePublishTimestamp: videoData.publishTimestamp || '',
     contDisplayType: categoryId,
     videoType: videoType,
-    totalEpisodes: calculateTotalEpisodes(videoData)
+    totalEpisodes: calculateTotalEpisodes(videoData),
+    
+    // 🔥 新增字段
+    wcKeyword: videoData.wcKeyword || '',  // 关键词
+    playType: videoData.playType || ''     // 播放类型
   };
+
+  console.log(`📊 视频数据: ${safeData.name}`);
+  console.log(`  地区: "${safeData.area}", 关键词: "${safeData.wcKeyword}", 播放类型: "${safeData.playType}"`);
 
   return safeData;
 }
@@ -322,6 +331,12 @@ function getVideoBindParams(safeData) {
   let totalEpisodes = safeData.totalEpisodes;
 
   const recommendationJson = JSON.stringify(safeData.recommendation);
+  
+  // 🔥 修复：包含有用数据的extra_data
+  const extraDataJson = JSON.stringify({
+    wcKeyword: safeData.wcKeyword,
+    playType: safeData.playType
+  });
 
   return [
     safeData.pID, 
@@ -352,10 +367,13 @@ function getVideoBindParams(safeData) {
     safeData.publishTime,
     safeData.publishTimestamp,
     recommendationJson,
-    '{}',
+    extraDataJson,  // 🔥 修复：使用包含数据的extra_data
     safeData.sourcePublishTime,
     safeData.sourcePublishTimestamp,
-    safeData.videoType
+    safeData.videoType,
+    // 🔥 新增字段
+    safeData.wcKeyword,    // wc_keyword
+    safeData.playType      // play_type
   ];
 }
 
