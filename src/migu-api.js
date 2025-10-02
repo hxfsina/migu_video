@@ -334,41 +334,40 @@ function getVideoBindParams(safeData) {
   });
 
   return [
-    safeData.pID, 
-    safeData.name, 
-    safeData.subTitle, 
-    picUrl,
-    picUrlH,
-    picUrlV,
-    safeData.programType, 
-    safeData.contDisplayType,
-    safeData.contDisplayName,
-    safeData.contentType,
-    safeData.score, 
-    safeData.year, 
-    safeData.area, 
-    safeData.language,
-    safeData.director, 
-    safeData.actor,
-    safeData.contentStyle, 
-    safeData.updateEP,
-    safeData.updateEP,
-    totalEpisodes,
-    is4k, 
-    isOriginal,
-    safeData.way,
-    safeData.auth,
-    safeData.assetId,
-    safeData.publishTime,
-    safeData.publishTimestamp,
-    recommendationJson,
-    extraDataJson,
-    safeData.sourcePublishTime,
-    safeData.sourcePublishTimestamp,
-    safeData.videoType,
-    // 🔥 新增2个字段
-    safeData.wcKeyword,    // 第33个
-    safeData.playType      // 第34个
+    safeData.pID,                       // 1. p_id
+    safeData.name,                      // 2. name
+    safeData.subTitle,                  // 3. sub_title
+    picUrl,                             // 4. pic_url
+    picUrlH,                            // 5. pic_url_h
+    picUrlV,                            // 6. pic_url_v
+    safeData.programType,               // 7. program_type
+    safeData.contDisplayType,           // 8. cont_display_type
+    safeData.contDisplayName,           // 9. cont_display_name
+    safeData.contentType,               // 10. cont_type
+    safeData.score,                     // 11. score
+    safeData.year,                      // 12. year
+    safeData.area,                      // 13. area
+    safeData.language,                  // 14. language
+    safeData.director,                  // 15. director
+    safeData.actor,                     // 16. actor
+    safeData.contentStyle,              // 17. content_style
+    safeData.updateEP,                  // 18. vod_remarks
+    safeData.updateEP,                  // 19. update_ep
+    totalEpisodes,                      // 20. total_episodes
+    is4k,                               // 21. is_4k
+    isOriginal,                         // 22. is_original
+    safeData.way,                       // 23. way
+    safeData.auth,                      // 24. auth
+    safeData.assetId,                   // 25. asset_id
+    safeData.publishTime,               // 26. publish_time
+    safeData.publishTimestamp,          // 27. publish_timestamp
+    recommendationJson,                 // 28. recommendation
+    extraDataJson,                      // 29. extra_data
+    safeData.sourcePublishTime,         // 30. source_publish_time
+    safeData.sourcePublishTimestamp,    // 31. source_publish_timestamp
+    safeData.videoType,                 // 32. video_type
+    safeData.wcKeyword,                 // 33. wc_keyword
+    safeData.playType                   // 34. play_type
   ];
 }
 
