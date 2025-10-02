@@ -50,18 +50,19 @@ export async function saveVideoData(videoData, categoryId) {
     const bindParams = getVideoBindParams(safeData);
     
     // 🔥 修复：更新SQL语句包含新字段
-await executeSQL(`
-  INSERT OR REPLACE INTO videos (
-    p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
-    program_type, cont_display_type, cont_display_name, cont_type,
-    score, year, area, language, director, actor,
-    content_style, vod_remarks, update_ep, total_episodes, 
-    is_4k, is_original, way, auth, asset_id, 
-    publish_time, publish_timestamp, recommendation, extra_data,
-    source_publish_time, source_publish_timestamp,
-    video_type, wc_keyword, play_type  -- 🔥 新增2个字段
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  
-`, bindParams);
+    await executeSQL(`
+      INSERT OR REPLACE INTO videos (
+        p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
+        program_type, cont_display_type, cont_display_name, cont_type,
+        score, year, area, language, director, actor,
+        content_style, vod_remarks, update_ep, total_episodes, 
+        is_4k, is_original, way, auth, asset_id, 
+        publish_time, publish_timestamp, recommendation, extra_data,
+        source_publish_time, source_publish_timestamp,
+        video_type, wc_keyword, play_type
+        -- 不包含 id, created_at, updated_at, detail (使用默认值)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, bindParams);
     
     // 修复：正确获取视频ID
     const result = await executeSQL(
