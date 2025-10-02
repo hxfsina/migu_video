@@ -6,7 +6,8 @@
     "init": "node src/init.js",
     "full": "node src/full-sync.js", 
     "incremental": "node src/incremental-sync.js",
-    "status": "node src/status.js"
+    "status": "node src/status.js",
+    "daily-home": "node ./src/daily-home-videos.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2"
