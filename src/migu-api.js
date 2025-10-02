@@ -49,7 +49,7 @@ export async function saveVideoData(videoData, categoryId) {
     const safeData = prepareVideoData(videoData, categoryId);
     const bindParams = getVideoBindParams(safeData);
     
-    // 保存视频基本信息
+    // 🔥 修复：更新SQL语句包含新字段
     await executeSQL(`
       INSERT OR REPLACE INTO videos (
         p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
@@ -59,8 +59,8 @@ export async function saveVideoData(videoData, categoryId) {
         is_4k, is_original, way, auth, asset_id, 
         publish_time, publish_timestamp, recommendation, extra_data,
         source_publish_time, source_publish_timestamp,
-        video_type
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        video_type, wc_keyword, play_type  -- 🔥 新增字段
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  -- 🔥 增加参数数量
     `, bindParams);
     
     // 修复：正确获取视频ID
@@ -69,37 +69,32 @@ export async function saveVideoData(videoData, categoryId) {
       [safeData.pID]
     );
     
-    // console.log('🔍 视频ID查询结果:', JSON.stringify(result, null, 2));
-    
     let videoId = null;
     
-    // 正确处理 D1 返回的数据结构
     if (result && result.result && result.result[0] && result.result[0].results && result.result[0].results.length > 0) {
       videoId = result.result[0].results[0].id;
     }
     
-    // console.log(`🔍 获取到的视频ID: ${videoId}`);
-    
     if (videoId) {
-      // 保存搜索索引
+      // 🔥 修复：更新搜索索引包含关键词
       await executeSQL(`
-        INSERT OR REPLACE INTO search_index (video_id, name, sub_title, director, actor, content_style)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO search_index (video_id, name, sub_title, director, actor, content_style, wc_keyword)
+        VALUES (?, ?, ?, ?, ?, ?, ?)  -- 🔥 增加参数
       `, [
         videoId, 
         safeData.name, 
         safeData.subTitle, 
         safeData.director, 
         safeData.actor, 
-        safeData.contentStyle
+        safeData.contentStyle,
+        safeData.wcKeyword  // 🔥 新增
       ]);
       
-     // console.log(`🔍 开始保存剧集数据...`);
       // 保存剧集信息
       const episodesSaved = await saveEpisodesData(videoId, safeData, videoData);
       
       if (episodesSaved) {
-        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) + 剧集`);
+        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) + 剧集 + 关键词`);
       } else {
         console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) - 剧集保存失败`);
       }
