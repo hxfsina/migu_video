@@ -369,7 +369,7 @@ function getVideoBindParams(safeData) {
     safeData.sourcePublishTimestamp,    // 31. source_publish_timestamp
     safeData.videoType,                 // 32. video_type
     safeData.wcKeyword,                 // 33. wc_keyword
-    safeData.playType                   // 34. play_type
+    safeData.playType,                   // 34. play_type
     safeData.createTime,                // 🔥 第35个: create_time
     safeData.publishDate                // 🔥 第36个: publish_date
   ];
