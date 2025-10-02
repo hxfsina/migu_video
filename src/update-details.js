@@ -79,9 +79,19 @@ async function getAllVideoIds() {
       'SELECT p_id, name FROM videos WHERE p_id IS NOT NULL ORDER BY created_at DESC'
     );
     
-    console.log('📊 SQL查询结果:', JSON.stringify(result, null, 2));
+    console.log('📊 SQL查询结果结构:', JSON.stringify(result, null, 2));
     
-    return result.results || [];
+    // 调试：检查不同的返回结构
+    if (result && result.results) {
+      return result.results;
+    } else if (result && Array.isArray(result)) {
+      return result;
+    } else if (result && result.result && result.result[0] && result.result[0].results) {
+      return result.result[0].results;
+    } else {
+      console.log('❓ 未知的返回结构');
+      return [];
+    }
   } catch (error) {
     console.error('获取所有视频ID失败:', error);
     return [];
@@ -94,10 +104,21 @@ async function updateAllVideoDetails() {
   
   console.log('🚀 开始更新所有视频简介信息');
   
-  // 先测试数据库连接
+  // 先测试数据库连接 - 修复返回结构处理
   try {
     const testResult = await executeSQL('SELECT COUNT(*) as count FROM videos');
-    console.log('📊 数据库连接测试成功，总视频数:', testResult.results[0].count);
+    console.log('📊 数据库连接测试结果:', JSON.stringify(testResult, null, 2));
+    
+    let totalCount = 0;
+    if (testResult && testResult.results && testResult.results[0]) {
+      totalCount = testResult.results[0].count;
+    } else if (testResult && testResult.result && testResult.result[0] && testResult.result[0].results && testResult.result[0].results[0]) {
+      totalCount = testResult.result[0].results[0].count;
+    } else if (testResult && testResult[0] && testResult[0].count) {
+      totalCount = testResult[0].count;
+    }
+    
+    console.log('📊 总视频数:', totalCount);
   } catch (error) {
     console.error('❌ 数据库连接失败:', error);
     return;
@@ -117,15 +138,15 @@ async function updateAllVideoDetails() {
     
     // 检查数据库中的视频
     const checkResult = await executeSQL('SELECT p_id, name FROM videos LIMIT 5');
-    console.log('📊 数据库中的前5个视频:', JSON.stringify(checkResult.results, null, 2));
+    console.log('📊 数据库中的前5个视频:', JSON.stringify(checkResult, null, 2));
     return;
   }
   
   let successCount = 0;
   let failCount = 0;
   
-  // 只测试前5个，避免运行太久
-  const testVideos = videos.slice(0, 5);
+  // 只测试前3个，避免运行太久
+  const testVideos = videos.slice(0, 3);
   
   for (let i = 0; i < testVideos.length; i++) {
     const video = testVideos[i];
