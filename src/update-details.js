@@ -74,9 +74,12 @@ async function updateVideoDetail(pId) {
 // 获取所有视频ID
 async function getAllVideoIds() {
   try {
+    console.log('🔍 执行SQL查询所有视频...');
     const result = await executeSQL(
       'SELECT p_id, name FROM videos WHERE p_id IS NOT NULL ORDER BY created_at DESC'
     );
+    
+    console.log('📊 SQL查询结果:', JSON.stringify(result, null, 2));
     
     return result.results || [];
   } catch (error) {
@@ -91,6 +94,15 @@ async function updateAllVideoDetails() {
   
   console.log('🚀 开始更新所有视频简介信息');
   
+  // 先测试数据库连接
+  try {
+    const testResult = await executeSQL('SELECT COUNT(*) as count FROM videos');
+    console.log('📊 数据库连接测试成功，总视频数:', testResult.results[0].count);
+  } catch (error) {
+    console.error('❌ 数据库连接失败:', error);
+    return;
+  }
+  
   // 直接写死配置
   const delayMs = 1500; // 1.5秒间隔
   
@@ -101,16 +113,23 @@ async function updateAllVideoDetails() {
   console.log(`📋 找到 ${videos.length} 个视频需要更新`);
   
   if (videos.length === 0) {
-    console.log('✅ 没有需要更新的视频');
+    console.log('❓ 为什么没有找到视频？检查数据库...');
+    
+    // 检查数据库中的视频
+    const checkResult = await executeSQL('SELECT p_id, name FROM videos LIMIT 5');
+    console.log('📊 数据库中的前5个视频:', JSON.stringify(checkResult.results, null, 2));
     return;
   }
   
   let successCount = 0;
   let failCount = 0;
   
-  for (let i = 0; i < videos.length; i++) {
-    const video = videos[i];
-    console.log(`\n📝 处理视频 [${i + 1}/${videos.length}]: ${video.name} (${video.p_id})`);
+  // 只测试前5个，避免运行太久
+  const testVideos = videos.slice(0, 5);
+  
+  for (let i = 0; i < testVideos.length; i++) {
+    const video = testVideos[i];
+    console.log(`\n📝 处理视频 [${i + 1}/${testVideos.length}]: ${video.name} (${video.p_id})`);
     
     const success = await updateVideoDetail(video.p_id);
     
@@ -121,27 +140,15 @@ async function updateAllVideoDetails() {
     }
     
     // 延迟，避免请求过快
-    if (i < videos.length - 1) {
+    if (i < testVideos.length - 1) {
       console.log(`⏳ 等待 ${delayMs}ms 后继续...`);
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
   
-  console.log(`\n🎊 更新完成!`);
+  console.log(`\n🎊 测试更新完成!`);
   console.log(`✅ 成功更新: ${successCount} 个视频`);
   console.log(`❌ 更新失败: ${failCount} 个视频`);
-  console.log(`📊 成功率: ${((successCount / videos.length) * 100).toFixed(1)}%`);
-  
-  // 统计更新后的情况
-  const result = await executeSQL(
-    'SELECT COUNT(*) as total, COUNT(detail) as with_detail FROM videos WHERE p_id IS NOT NULL'
-  );
-  
-  const stats = result.results[0];
-  console.log(`\n📊 数据库统计:`);
-  console.log(`📺 总视频数: ${stats.total}`);
-  console.log(`📝 有简介的视频: ${stats.with_detail}`);
-  console.log(`❓ 无简介的视频: ${stats.total - stats.with_detail}`);
 }
 
 // 执行更新
