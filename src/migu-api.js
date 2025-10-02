@@ -307,7 +307,11 @@ function prepareVideoData(videoData, categoryId) {
     
     // 🔥 新增字段
     wcKeyword: videoData.wcKeyword || '',  // 关键词
-    playType: videoData.playType || ''     // 播放类型
+    playType: videoData.playType || '',     // 播放类型
+
+    createTime: videoData.createTime || '',       // 官方创建时间
+    publishDate: videoData.publishDate || 0       // 官方发布时间戳
+    
   };
 
   //console.log(`📊 视频数据: ${safeData.name}`);
@@ -330,7 +334,9 @@ function getVideoBindParams(safeData) {
   
   const extraDataJson = JSON.stringify({
     wcKeyword: safeData.wcKeyword,
-    playType: safeData.playType
+    playType: safeData.playType,
+    createTime: safeData.createTime,    // 🔥 保存官方上架时间
+    publishDate: safeData.publishDate   // 🔥 保存官方时间戳
   });
 
   return [
@@ -368,6 +374,7 @@ function getVideoBindParams(safeData) {
     safeData.videoType,                 // 32. video_type
     safeData.wcKeyword,                 // 33. wc_keyword
     safeData.playType                   // 34. play_type
+    
   ];
 }
 
