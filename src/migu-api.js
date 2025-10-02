@@ -327,7 +327,6 @@ function getVideoBindParams(safeData) {
 
   const recommendationJson = JSON.stringify(safeData.recommendation);
   
-  // 🔥 修复：包含有用数据的extra_data
   const extraDataJson = JSON.stringify({
     wcKeyword: safeData.wcKeyword,
     playType: safeData.playType
@@ -362,13 +361,13 @@ function getVideoBindParams(safeData) {
     safeData.publishTime,
     safeData.publishTimestamp,
     recommendationJson,
-    extraDataJson,  // 🔥 修复：使用包含数据的extra_data
+    extraDataJson,
     safeData.sourcePublishTime,
     safeData.sourcePublishTimestamp,
     safeData.videoType,
-    // 🔥 新增字段
-    safeData.wcKeyword,    // wc_keyword
-    safeData.playType      // play_type
+    // 🔥 新增2个字段
+    safeData.wcKeyword,    // 第33个
+    safeData.playType      // 第34个
   ];
 }
 
