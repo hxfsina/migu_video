@@ -2,10 +2,26 @@ import fetch from 'node-fetch';
 import { executeSQL } from './db.js';
 
 // 从咪咕API获取分类数据
-export async function fetchMiguCategory(cid, page, pageSize) {
+export async function fetchMiguCategory(cid, page, pageSize, filters = {}) {
   const apiBase = 'https://jadeite.migu.cn';
   const baseParams = 'packId=1002581,1003861,1003863,1003866,1002601,1004761,1004121,1004641,1005521,1005261,1015768&copyrightTerminal=3';
-  const url = `${apiBase}/search/v3/category?${baseParams}&pageStart=${page}&pageNum=${pageSize}&contDisplayType=${cid}`;
+  
+  // 构建查询参数
+  let url = `${apiBase}/search/v3/category?${baseParams}&pageStart=${page}&pageNum=${pageSize}&contDisplayType=${cid}`;
+  
+  // 🔥 添加筛选参数
+  if (filters.mediaYear) {
+    url += `&mediaYear=${filters.mediaYear}`;
+  }
+  if (filters.mediaArea) {
+    url += `&mediaArea=${filters.mediaArea}`;
+  }
+  if (filters.mediaType) {
+    url += `&mediaType=${filters.mediaType}`;
+  }
+  if (filters.payType) {
+    url += `&payType=${filters.payType}`;
+  }
   
   try {
     console.log(`🔗 请求URL: ${url.replace(/(pageStart=)\d+/, '$1' + page)}`);
