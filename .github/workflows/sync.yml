@@ -10,8 +10,6 @@ on:
         default: 'incremental'
         type: choice
         options:
-        - init
-        - full
         - incremental
 
 jobs:
@@ -25,8 +23,8 @@ jobs:
           node-version: '18'
       - name: Install dependencies
         run: npm install
-      - name: Run sync
-        run: npm run ${{ github.event.inputs.action || 'incremental' }}
+      - name: Run incremental sync
+        run: node src/incremental-sync.js
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
