@@ -2,11 +2,14 @@
 import fetch from 'node-fetch';
 import { executeSQL, checkEnv } from './db.js';
 
-// 获取所有视频ID
-async function getAllVideoIds() {
+// 获取所有简介为空的视频ID
+async function getVideosWithoutDetail() {
   try {
     const result = await executeSQL(
-      'SELECT p_id, name FROM videos WHERE p_id IS NOT NULL ORDER BY created_at DESC'
+      `SELECT p_id, name FROM videos 
+       WHERE (detail IS NULL OR detail = '') 
+       AND p_id IS NOT NULL 
+       ORDER BY created_at DESC`
     );
     
     // 修复：正确处理返回结构
@@ -19,7 +22,7 @@ async function getAllVideoIds() {
       return [];
     }
   } catch (error) {
-    console.error('获取所有视频ID失败:', error);
+    console.error('获取简介为空视频失败:', error);
     return [];
   }
 }
@@ -84,49 +87,47 @@ async function updateVideoDetail(pId) {
   }
 }
 
-// 主函数：更新所有视频简介
-async function updateAllVideoDetails() {
+// 主函数：更新所有简介为空的视频
+async function updateVideoDetails() {
   checkEnv();
   
-  console.log('🚀 开始更新所有视频简介信息');
+  console.log('🚀 开始更新简介为空的视频信息');
   
-  // 直接写死配置
   const delayMs = 1500; // 1.5秒间隔
   
-  // 获取所有视频
-  console.log('🔍 获取所有视频...');
-  const videos = await getAllVideoIds();
+  // 获取所有简介为空的视频
+  console.log('🔍 获取简介为空的视频...');
+  const videos = await getVideosWithoutDetail();
   
-  console.log(`📋 找到 ${videos.length} 个视频需要更新`);
+  console.log(`📋 找到 ${videos.length} 个简介为空的视频需要更新`);
   
   if (videos.length === 0) {
-    console.log('✅ 没有需要更新的视频');
+    console.log('✅ 所有视频都有简介，无需更新');
     return;
   }
   
   let successCount = 0;
   let failCount = 0;
   
-  // 更新所有视频
+  // 更新所有简介为空的视频
   for (let i = 0; i < videos.length; i++) {
     const video = videos[i];
+    
+    console.log(`🔄 更新第 ${i + 1}/${videos.length} 个视频: ${video.name}`);
     
     const success = await updateVideoDetail(video.p_id);
     
     if (success) {
       successCount++;
+      console.log(`✅ 更新成功: ${video.name}`);
     } else {
       failCount++;
+      console.log(`❌ 更新失败: ${video.name}`);
     }
     
     // 延迟，避免请求过快
     if (i < videos.length - 1) {
       await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-    
-    // 每50个视频显示一次进度
-    if ((i + 1) % 50 === 0) {
-      console.log(`📊 进度: ${i + 1}/${videos.length} (${((i + 1) / videos.length * 100).toFixed(1)}%) - 成功: ${successCount} 失败: ${failCount}`);
     }
   }
   
@@ -155,4 +156,4 @@ async function updateAllVideoDetails() {
 }
 
 // 执行更新
-updateAllVideoDetails().catch(console.error);
+updateVideoDetails().catch(console.error);
