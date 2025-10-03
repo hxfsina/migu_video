@@ -121,7 +121,7 @@ async function incrementalSyncNonMemberVideos() {
         }
         
         // 最多检查10页，避免无限循环
-        if (currentPage > 10) {
+        if (currentPage > 50) {
           console.log(`⏹️  达到最大页数限制，停止同步`);
           hasMoreData = false;
           break;
