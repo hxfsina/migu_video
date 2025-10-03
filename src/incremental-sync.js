@@ -154,20 +154,55 @@ async function incrementalSyncAllCategories() {
 
 // 检查视频是否需要更新
 function checkIfVideoNeedsUpdate(videoData, existingVideo) {
-  // 1. 检查集数信息是否变化
   const newUpdateEP = videoData.updateEP || '';
-  const newTotalEpisodes = calculateTotalEpisodes(videoData);
+  const existingUpdateEP = existingVideo.update_ep || '';
   
-  if (newUpdateEP !== existingVideo.update_ep || newTotalEpisodes !== existingVideo.total_episodes) {
-    return true;
+  // 1. 如果剧集已完结，不需要更新
+  if (isSeriesCompleted(newUpdateEP)) {
+    return false;
   }
   
-  // 可以添加其他检查条件，比如评分、推荐标签等
+  // 2. 如果剧集还在更新中，检查集数信息是否变化
+  if (isSeriesUpdating(newUpdateEP)) {
+    // 检查集数信息是否变化
+    if (newUpdateEP !== existingUpdateEP) {
+      return true;
+    }
+    
+    // 检查总集数是否变化
+    const newTotalEpisodes = calculateTotalEpisodes(videoData);
+    const existingTotalEpisodes = existingVideo.total_episodes;
+    
+    if (newTotalEpisodes !== existingTotalEpisodes) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // 3. 其他情况（可能是电影等非剧集类），使用原来的逻辑
+  const newTotalEpisodes = calculateTotalEpisodes(videoData);
+  
+  if (newUpdateEP !== existingUpdateEP || newTotalEpisodes !== existingVideo.total_episodes) {
+    return true;
+  }
   
   return false;
 }
 
-// 计算总集数
+// 判断剧集是否已完结
+function isSeriesCompleted(updateEP) {
+  const completedKeywords = ['全集', '已完结', '集全', '全'];
+  return completedKeywords.some(keyword => updateEP.includes(keyword));
+}
+
+// 判断剧集是否在更新中
+function isSeriesUpdating(updateEP) {
+  const updatingKeywords = ['更新', '更新至', '连载', '热播'];
+  return updatingKeywords.some(keyword => updateEP.includes(keyword));
+}
+
+// 计算总集数（保持不变）
 function calculateTotalEpisodes(videoData) {
   const updateEP = videoData.updateEP || '';
   
