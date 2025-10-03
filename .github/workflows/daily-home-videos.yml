@@ -3,7 +3,7 @@ name: Daily Home Videos Update
 on:
   workflow_dispatch:  # 手动触发
   schedule:
-    - cron: '0 3 * * *'  # 每天凌晨3点运行 (UTC时间)
+    - cron: '0 19 * * *'  # 每天凌晨3点运行 (UTC时间)
 
 jobs:
   daily-home-update:
