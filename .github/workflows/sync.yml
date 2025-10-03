@@ -1,7 +1,7 @@
 name: Sync Migu Data
 on:
   schedule:
-    - cron: '0 1 * * *'  # 每天凌晨1点增量同步
+    - cron: '0 17 * * *'  # 每天凌晨1点增量同步
   workflow_dispatch:      # 手动触发
     inputs:
       action:
