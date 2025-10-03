@@ -100,13 +100,7 @@ async function incrementalSyncMemberVideos() {
         if (hasMoreData) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
-        
-        // 最多检查10页，避免无限循环
-        if (currentPage > 10) {
-          console.log(`⏹️  达到最大页数限制，停止同步`);
-          hasMoreData = false;
-          break;
-        }
+               
       }
       
       // 更新分类统计
