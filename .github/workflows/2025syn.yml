@@ -1,6 +1,8 @@
 name: Sync 2025 Migu Data
 on:
-  workflow_dispatch:      # 仅手动触发
+  schedule:
+    - cron: '0 5 * * *'  # 每天凌晨5点自动运行
+  workflow_dispatch:      # 保留手动触发
 
 jobs:
   sync:
