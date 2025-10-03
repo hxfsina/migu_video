@@ -14,6 +14,7 @@ async function incrementalSync2025Videos() {
   let successCount = 0;
   let totalNew = 0;
   let totalUpdated = 0;
+  let totalEpisodesUpdated = 0;
   
   for (const cid of allCategories) {
     const categoryName = categoryNames[cid] || cid;
@@ -30,6 +31,7 @@ async function incrementalSync2025Videos() {
       let hasMoreData = true;
       let categoryNew = 0;
       let categoryUpdated = 0;
+      let categoryEpisodesUpdated = 0;
       
       // 获取该分类下2025年已存在的视频ID
       const existingResult = await executeSQL(
@@ -53,7 +55,7 @@ async function incrementalSync2025Videos() {
       while (hasMoreData) {
         console.log(`📄 检查分类 ${categoryName} 第 ${currentPage} 页 - 2025年`);
         
-        const videos = await fetchMiguCategory(cid, currentPage, 20);
+        const videos = await fetchMiguCategory(cid, currentPage, 20, { mediaYear: '2025' });
         
         // 如果没有数据或数据为空，停止同步
         if (!videos || videos.length === 0) {
@@ -87,6 +89,7 @@ async function incrementalSync2025Videos() {
         
         let pageNew = 0;
         let pageUpdated = 0;
+        let pageEpisodesUpdated = 0;
         
         for (const videoData of videos2025) {
           const videoId = videoData.pID;
@@ -142,6 +145,7 @@ async function incrementalSync2025Videos() {
       successCount++;
       totalNew += categoryNew;
       totalUpdated += categoryUpdated;
+      totalEpisodesUpdated += categoryEpisodesUpdated;
       
       console.log(`✅ 分类 ${categoryName} 2025年增量同步完成:`);
       console.log(`   新增视频: ${categoryNew} 个`);
@@ -171,20 +175,55 @@ async function incrementalSync2025Videos() {
 
 // 检查视频是否需要更新
 function checkIfVideoNeedsUpdate(videoData, existingVideo) {
-  // 1. 检查集数信息是否变化
   const newUpdateEP = videoData.updateEP || '';
-  const newTotalEpisodes = calculateTotalEpisodes(videoData);
+  const existingUpdateEP = existingVideo.update_ep || '';
   
-  if (newUpdateEP !== existingVideo.update_ep || newTotalEpisodes !== existingVideo.total_episodes) {
-    return true;
+  // 1. 如果剧集已完结，不需要更新
+  if (isSeriesCompleted(newUpdateEP)) {
+    return false;
   }
   
-  // 可以添加其他检查条件，比如评分、推荐标签等
+  // 2. 如果剧集还在更新中，检查集数信息是否变化
+  if (isSeriesUpdating(newUpdateEP)) {
+    // 检查集数信息是否变化
+    if (newUpdateEP !== existingUpdateEP) {
+      return true;
+    }
+    
+    // 检查总集数是否变化
+    const newTotalEpisodes = calculateTotalEpisodes(videoData);
+    const existingTotalEpisodes = existingVideo.total_episodes;
+    
+    if (newTotalEpisodes !== existingTotalEpisodes) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // 3. 其他情况（可能是电影等非剧集类），使用原来的逻辑
+  const newTotalEpisodes = calculateTotalEpisodes(videoData);
+  
+  if (newUpdateEP !== existingUpdateEP || newTotalEpisodes !== existingVideo.total_episodes) {
+    return true;
+  }
   
   return false;
 }
 
-// 计算总集数
+// 判断剧集是否已完结
+function isSeriesCompleted(updateEP) {
+  const completedKeywords = ['全集', '已完结', '集全', '全'];
+  return completedKeywords.some(keyword => updateEP.includes(keyword));
+}
+
+// 判断剧集是否在更新中
+function isSeriesUpdating(updateEP) {
+  const updatingKeywords = ['更新', '更新至', '连载', '热播'];
+  return updatingKeywords.some(keyword => updateEP.includes(keyword));
+}
+
+// 计算总集数（保持不变）
 function calculateTotalEpisodes(videoData) {
   const updateEP = videoData.updateEP || '';
   
