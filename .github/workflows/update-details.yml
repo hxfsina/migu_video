@@ -1,7 +1,9 @@
 name: Update All Video Details
 
 on:
-  workflow_dispatch:  # 手动触发
+  schedule:
+    - cron: '0 9 * * *'  # 每天9点自动运行
+  workflow_dispatch:  # 保留手动触发
 
 jobs:
   update-details:
