@@ -1,0 +1,13 @@
+{
+  "sites": [
+    {
+      "key": "miguvideo",
+      "name": "咪咕视频",
+      "type": 3,
+      "api": "https://miguvideo.hxfrock.ggff.net/migu_web.py",
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1
+    }
+  ]
+}
