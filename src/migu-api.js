@@ -327,7 +327,13 @@ function prepareVideoData(videoData, categoryId) {
     playType: videoData.playType || '',     // 播放类型
 
     createTime: videoData.createTime || '',       // 官方创建时间
-    publishDate: videoData.publishDate || 0       // 官方发布时间戳
+    publishDate: videoData.publishDate || 0,       // 官方发布时间戳
+
+    // 🔥 新增：付费类型字段
+    tipCode: videoData.tip?.code || '',
+    tipMsg: videoData.tip?.msg || '',
+    storeTipCode: videoData.storeTip?.code || '',
+    storeTipMsg: videoData.storeTip?.msg || ''
     
   };
 
@@ -389,7 +395,12 @@ function getVideoBindParams(safeData) {
     safeData.wcKeyword,                 // 33. wc_keyword
     safeData.playType,                   // 34. play_type
     safeData.createTime,                // 🔥 第35个: create_time
-    safeData.publishDate                // 🔥 第36个: publish_date
+    safeData.publishDate,                // 🔥 第36个: publish_date
+    // 🔥 新增：付费类型字段
+    safeData.tipCode,                   // 37. tip_code
+    safeData.tipMsg,                    // 38. tip_msg
+    safeData.storeTipCode,              // 39. store_tip_code
+    safeData.storeTipMsg                // 40. store_tip_msg
   ];
 }
 
