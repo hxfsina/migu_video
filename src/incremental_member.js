@@ -31,10 +31,10 @@ async function incrementalSyncMemberVideos() {
       let categoryNew = 0;
       let categoryUpdated = 0;
       
-      // 获取该分类下已存在的会员视频ID
+      // 🔥 修正：使用 tip_code 字段查询会员视频
       const existingResult = await executeSQL(
-        'SELECT p_id, update_ep, total_episodes FROM videos WHERE cont_display_type = ? AND way = ?',
-        [cid, '2']
+        'SELECT p_id, update_ep, total_episodes FROM videos WHERE cont_display_type = ? AND tip_code = ?',
+        [cid, 'VIP']
       );
       
       const existingVideos = {};
@@ -103,10 +103,10 @@ async function incrementalSyncMemberVideos() {
                
       }
       
-      // 更新分类统计
+      // 🔥 修正：使用 tip_code 字段统计
       const totalResult = await executeSQL(
-        'SELECT COUNT(*) as count FROM videos WHERE cont_display_type = ? AND way = ?',
-        [cid, '2']
+        'SELECT COUNT(*) as count FROM videos WHERE cont_display_type = ? AND tip_code = ?',
+        [cid, 'VIP']
       );
       
       let totalVideos = 0;
