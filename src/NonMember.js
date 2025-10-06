@@ -35,10 +35,10 @@ async function incrementalSyncNonMemberVideos() {
       let categoryNew = 0;
       let categoryUpdated = 0;
       
-      // 获取该分类下已存在的非会员视频ID（保持原来的增量逻辑）
+      // 🔥 修正：使用 tip_code 字段查询非会员视频
       const existingResult = await executeSQL(
-        'SELECT p_id, update_ep, total_episodes FROM videos WHERE cont_display_type = ? AND way IN (?, ?, ?, ?)',
-        [cid, '1', '3', '4', '5']
+        'SELECT p_id, update_ep, total_episodes FROM videos WHERE cont_display_type = ? AND tip_code IN (?, ?, ?, ?)',
+        [cid, '', 'USE_TICKET', 'FREE_LIMIT', 'HUIYUANZHEKOU01']
       );
       
       const existingVideos = {};
@@ -122,10 +122,10 @@ async function incrementalSyncNonMemberVideos() {
               
       }
       
-      // 更新分类统计
+      // 🔥 修正：使用 tip_code 字段统计
       const totalResult = await executeSQL(
-        'SELECT COUNT(*) as count FROM videos WHERE cont_display_type = ? AND way IN (?, ?, ?, ?)',
-        [cid, '1', '3', '4', '5']
+        'SELECT COUNT(*) as count FROM videos WHERE cont_display_type = ? AND tip_code IN (?, ?, ?, ?)',
+        [cid, '', 'USE_TICKET', 'FREE_LIMIT', 'HUIYUANZHEKOU01']
       );
       
       let totalVideos = 0;
