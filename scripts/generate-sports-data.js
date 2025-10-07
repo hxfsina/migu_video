@@ -1,6 +1,10 @@
 // scripts/generate-sports-data.js
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 确保数据目录存在
 const dataDir = path.join(__dirname, '..', 'data');
