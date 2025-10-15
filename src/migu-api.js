@@ -1,48 +1,5 @@
 import fetch from 'node-fetch';
-
-// Cloudflare D1 配置
-const config = {
-  accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-  apiToken: process.env.CLOUDFLARE_API_TOKEN,
-  databaseId: process.env.D1_DATABASE_ID
-};
-
-// D1 API 基础URL
-const D1_API_BASE = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/d1/database/${config.databaseId}`;
-
-// 执行 D1 SQL
-export async function executeSQL(sql, params = []) {
-  const response = await fetch(`${D1_API_BASE}/query`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${config.apiToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      sql,
-      params
-    })
-  });
-
-  const result = await response.json();
-  
-  if (!result.success) {
-    throw new Error(`D1 SQL Error: ${JSON.stringify(result.errors)}`);
-  }
-  
-  return result;
-}
-
-// 检查环境变量
-export function checkEnv() {
-  if (!config.accountId || !config.apiToken || !config.databaseId) {
-    console.error('错误: 请设置以下环境变量:');
-    console.error('CLOUDFLARE_ACCOUNT_ID - Cloudflare 账户ID');
-    console.error('CLOUDFLARE_API_TOKEN - Cloudflare API Token');
-    console.error('D1_DATABASE_ID - D1 数据库ID');
-    process.exit(1);
-  }
-}
+import { executeSQL } from './db.js';
 
 // 从咪咕API获取分类数据
 export async function fetchMiguCategory(cid, page, pageSize, filters = {}) {
@@ -107,9 +64,9 @@ export async function fetchVideoDetail(pId) {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 9; CM311-5-ZG Build/CM311-5-ZG)',
-        //'Origin': 'https://www.miguvideo.com',
-        //'Referer': 'https://www.miguvideo.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Origin': 'https://www.miguvideo.com',
+        'Referer': 'https://www.miguvideo.com/',
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
       },
@@ -176,7 +133,7 @@ export async function fetchVideoDetailsParallel(videoList) {
   return details;
 }
 
-// 保存视频数据 - 主要逻辑（使用事务优化）
+// 保存视频数据 - 主要逻辑
 export async function saveVideoData(videoData, categoryId, videoDetail = null) {
   let transactionStarted = false;
   
