@@ -43,3 +43,23 @@ export function checkEnv() {
     process.exit(1);
   }
 }
+
+// 批量执行SQL - 性能优化
+export async function executeBatchSQL(queries) {
+  const response = await fetch(`${D1_API_BASE}/query`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.apiToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(queries)
+  });
+
+  const result = await response.json();
+  
+  if (!result.success) {
+    throw new Error(`D1 SQL Batch Error: ${JSON.stringify(result.errors)}`);
+  }
+  
+  return result;
+}
