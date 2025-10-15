@@ -107,9 +107,9 @@ export async function fetchVideoDetail(pId) {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Origin': 'https://www.miguvideo.com',
-        'Referer': 'https://www.miguvideo.com/',
+        'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 9; CM311-5-ZG Build/CM311-5-ZG)',
+        //'Origin': 'https://www.miguvideo.com',
+        //'Referer': 'https://www.miguvideo.com/',
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
       },
