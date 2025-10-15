@@ -64,7 +64,7 @@ export async function fetchVideoDetail(pId) {
   const url = `https://program-sc.miguvideo.com/program/v4/cont/content-info/${pId}/1`;
   
   try {
-    console.log(`🔗 获取视频详情: ${pId}`);
+   // console.log(`🔗 获取视频详情: ${pId}`);
     
     const response = await fetch(url, {
       headers: {
@@ -231,7 +231,7 @@ async function shouldUpdateVideo(existingVideo, newData) {
     const newScore = parseFloat(newData.score) || 0;
     
     if (Math.abs(oldScore - newScore) > 0.1) {
-      console.log(`🎬 电影评分变化: ${oldScore} -> ${newScore}`);
+   //   console.log(`🎬 电影评分变化: ${oldScore} -> ${newScore}`);
       return true;
     }
   } 
@@ -246,19 +246,19 @@ async function shouldUpdateVideo(existingVideo, newData) {
     
     // 检查评分变化
     if (Math.abs(oldScore - newScore) > 0.1) {
-      console.log(`📺 剧集评分变化: ${oldScore} -> ${newScore}`);
+   //   console.log(`📺 剧集评分变化: ${oldScore} -> ${newScore}`);
       return true;
     }
     
     // 检查集数信息变化
     if (oldUpdateEP !== newUpdateEP) {
-      console.log(`📺 更新集数变化: "${oldUpdateEP}" -> "${newUpdateEP}"`);
+   //   console.log(`📺 更新集数变化: "${oldUpdateEP}" -> "${newUpdateEP}"`);
       return true;
     }
     
     // 检查总集数变化
     if (oldTotalEpisodes !== newTotalEpisodes) {
-      console.log(`📺 总集数变化: ${oldTotalEpisodes} -> ${newTotalEpisodes}`);
+   //   console.log(`📺 总集数变化: ${oldTotalEpisodes} -> ${newTotalEpisodes}`);
       return true;
     }
   }
@@ -276,7 +276,7 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
     const videoPid = safeData.pID;
     const videoType = safeData.videoType;
     
-    console.log(`🎬 处理剧集: ${safeData.name}, 类型: ${videoType}`);
+  //  console.log(`🎬 处理剧集: ${safeData.name}, 类型: ${videoType}`);
     
     // 从详情数据获取剧集信息
     if (videoDetail && videoDetail.datas && Array.isArray(videoDetail.datas)) {
@@ -297,7 +297,7 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
     // 从 extraData.episodes 获取剧集ID
     else if (safeData.extraData && safeData.extraData.episodes && Array.isArray(safeData.extraData.episodes)) {
       const episodeIds = safeData.extraData.episodes;
-      console.log(`📋 从extraData获取 ${episodeIds.length} 个剧集ID`);
+   //   console.log(`📋 从extraData获取 ${episodeIds.length} 个剧集ID`);
       
       episodes = episodeIds.map((episodeId, index) => {
         let episodeName = `第${index + 1}集`;
