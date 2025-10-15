@@ -3,13 +3,13 @@ import { executeSQL } from './db.js';
 
 // 从咪咕API获取分类数据
 export async function fetchMiguCategory(cid, page, pageSize, filters = {}) {
-  const apiBase = 'https://jadeite.migu.cn';
+  const apiBase = 'https://jadeiteapp.migu.cn';
   const baseParams = 'packId=1002581,1003861,1003863,1003866,1002601,1004761,1004121,1004641,1005521,1005261,1015768&copyrightTerminal=3';
   
   // 构建查询参数
   let url = `${apiBase}/search/v3/category?${baseParams}&pageStart=${page}&pageNum=${pageSize}&contDisplayType=${cid}`;
   
-  // 🔥 添加筛选参数
+  // 添加筛选参数
   if (filters.mediaYear) {
     url += `&mediaYear=${filters.mediaYear}`;
   }
@@ -59,45 +59,120 @@ export async function fetchMiguCategory(cid, page, pageSize, filters = {}) {
   }
 }
 
-// 保存视频数据
+// 获取视频详情信息
+export async function fetchVideoDetail(pId) {
+  const url = `https://program-sc.miguvideo.com/program/v4/cont/content-info/${pId}/1`;
+  
+  try {
+    console.log(`🔗 获取视频详情: ${pId}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Origin': 'https://www.miguvideo.com',
+        'Referer': 'https://www.miguvideo.com/',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+      },
+      timeout: 10000
+    });
+    
+    if (!response.ok) {
+      console.log(`❌ 获取详情HTTP错误: ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (data.code !== 200) {
+      console.log(`❌ 获取详情API错误: ${data.message}`);
+      return null;
+    }
+    
+    console.log(`✅ 获取视频详情成功: ${pId}`);
+    return data.body?.data || null;
+    
+  } catch (error) {
+    console.error(`❌ 获取视频详情失败 ${pId}:`, error.message);
+    return null;
+  }
+}
+
+// 保存视频数据 - 主要逻辑
 export async function saveVideoData(videoData, categoryId) {
   try {
-    const safeData = prepareVideoData(videoData, categoryId);
+    // 检查视频是否已存在
+    const existingVideo = await checkVideoExists(videoData.pID);
+    
+    // 获取视频详情信息
+    const videoDetail = await fetchVideoDetail(videoData.pID);
+    
+    const safeData = prepareVideoData(videoData, categoryId, videoDetail);
+    
+    // 判断是否需要更新
+    const shouldUpdate = await shouldUpdateVideo(existingVideo, safeData);
+    
+    if (!shouldUpdate && existingVideo) {
+      console.log(`⏭️  跳过更新: ${safeData.name} (无变化)`);
+      return true;
+    }
+    
     const bindParams = getVideoBindParams(safeData);
     
-    // 在 saveVideoData 函数中修复SQL
-    // 修改后的SQL语句（添加4个新字段）
-    await executeSQL(`
-      INSERT OR REPLACE INTO videos (
-        p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
-        program_type, cont_display_type, cont_display_name, cont_type,
-        score, year, area, language, director, actor,
-        content_style, vod_remarks, update_ep, total_episodes, 
-        is_4k, is_original, way, auth, asset_id, 
-        publish_time, publish_timestamp, recommendation, extra_data,
-        source_publish_time, source_publish_timestamp,
-        video_type, wc_keyword, play_type, create_time, publish_date,
-        tip_code, tip_msg, store_tip_code, store_tip_msg  -- 🔥 新增4个字段
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  -- 🔥 40个问号
-    `, bindParams);
+    if (existingVideo && shouldUpdate) {
+      // 更新现有记录
+      await executeSQL(`
+        UPDATE videos SET
+          name = ?, sub_title = ?, pic_url = ?, pic_url_h = ?, pic_url_v = ?,
+          program_type = ?, cont_display_type = ?, cont_display_name = ?, cont_type = ?,
+          score = ?, year = ?, area = ?, language = ?, director = ?, actor = ?,
+          content_style = ?, vod_remarks = ?, update_ep = ?, total_episodes = ?,
+          is_4k = ?, is_original = ?, way = ?, auth = ?, asset_id = ?,
+          publish_time = ?, publish_timestamp = ?, recommendation = ?, extra_data = ?,
+          source_publish_time = ?, source_publish_timestamp = ?,
+          video_type = ?, wc_keyword = ?, play_type = ?, create_time = ?, publish_date = ?,
+          tip_code = ?, tip_msg = ?, store_tip_code = ?, store_tip_msg = ?,
+          detail = ?, updated_at = datetime('now')
+        WHERE p_id = ?
+      `, [...bindParams.slice(1), safeData.pID]);
+      
+      console.log(`🔄 更新视频成功: ${safeData.name}`);
+    } else {
+      // 新增记录
+      await executeSQL(`
+        INSERT INTO videos (
+          p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
+          program_type, cont_display_type, cont_display_name, cont_type,
+          score, year, area, language, director, actor,
+          content_style, vod_remarks, update_ep, total_episodes, 
+          is_4k, is_original, way, auth, asset_id, 
+          publish_time, publish_timestamp, recommendation, extra_data,
+          source_publish_time, source_publish_timestamp,
+          video_type, wc_keyword, play_type, create_time, publish_date,
+          tip_code, tip_msg, store_tip_code, store_tip_msg, detail,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `, bindParams);
+      
+      console.log(`✅ 新增视频成功: ${safeData.name}`);
+    }
     
-    // 修复：正确获取视频ID
+    // 获取视频ID
     const result = await executeSQL(
       'SELECT id FROM videos WHERE p_id = ?',
       [safeData.pID]
     );
     
     let videoId = null;
-    
     if (result && result.result && result.result[0] && result.result[0].results && result.result[0].results.length > 0) {
       videoId = result.result[0].results[0].id;
     }
     
     if (videoId) {
-      // 🔥 修复：更新搜索索引包含关键词
+      // 更新搜索索引
       await executeSQL(`
         INSERT OR REPLACE INTO search_index (video_id, name, sub_title, director, actor, content_style, wc_keyword)
-        VALUES (?, ?, ?, ?, ?, ?, ?)  -- 🔥 增加参数
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `, [
         videoId, 
         safeData.name, 
@@ -105,111 +180,245 @@ export async function saveVideoData(videoData, categoryId) {
         safeData.director, 
         safeData.actor, 
         safeData.contentStyle,
-        safeData.wcKeyword  // 🔥 新增
+        safeData.wcKeyword
       ]);
       
-      // 保存剧集信息
-      const episodesSaved = await saveEpisodesData(videoId, safeData, videoData);
-      
-      if (episodesSaved) {
-        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) + 剧集 + 关键词`);
-      } else {
-        console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType}) - 剧集保存失败`);
+      // 保存剧集信息 - 只在新增或剧集类更新时处理
+      if (!existingVideo || safeData.videoType !== 'movie') {
+        const episodesSaved = await saveEpisodesData(videoId, safeData, videoDetail);
+        
+        if (episodesSaved) {
+          console.log(`🎬 视频 ${safeData.name} 剧集保存成功`);
+        }
       }
-    } else {
-      console.log(`❌ 无法获取视频ID，跳过剧集保存: ${safeData.name}`);
-      console.log(`✅ 保存视频成功: ${safeData.name} (${safeData.videoType})`);
     }
     
     return true;
     
   } catch (error) {
-    console.error(`❌ 保存视频失败:`, error.message);
+    console.error(`❌ 保存视频失败 ${videoData.name}:`, error.message);
     return false;
   }
 }
 
-// 保存剧集数据 - 添加详细调试
-async function saveEpisodesData(videoId, safeData, originalData) {
+// 检查视频是否已存在
+async function checkVideoExists(pId) {
   try {
-  //  console.log(`🎬 开始处理剧集，videoId: ${videoId}, 视频: ${safeData.name}`);
+    const result = await executeSQL(
+      'SELECT id, score, update_ep, total_episodes FROM videos WHERE p_id = ?',
+      [pId]
+    );
     
+    if (result && result.result && result.result[0] && result.result[0].results && result.result[0].results.length > 0) {
+      return result.result[0].results[0];
+    }
+    return null;
+  } catch (error) {
+    console.error(`❌ 检查视频存在失败:`, error.message);
+    return null;
+  }
+}
+
+// 判断是否需要更新视频
+async function shouldUpdateVideo(existingVideo, newData) {
+  if (!existingVideo) {
+    return true; // 新增视频
+  }
+  
+  // 电影类：主要检查评分是否有变化
+  if (newData.videoType === 'movie') {
+    const oldScore = parseFloat(existingVideo.score) || 0;
+    const newScore = parseFloat(newData.score) || 0;
+    
+    if (Math.abs(oldScore - newScore) > 0.1) {
+      console.log(`🎬 电影评分变化: ${oldScore} -> ${newScore}`);
+      return true;
+    }
+  } 
+  // 剧集类：检查评分、集数信息
+  else {
+    const oldScore = parseFloat(existingVideo.score) || 0;
+    const newScore = parseFloat(newData.score) || 0;
+    const oldUpdateEP = existingVideo.update_ep || '';
+    const newUpdateEP = newData.updateEP || '';
+    const oldTotalEpisodes = existingVideo.total_episodes || 0;
+    const newTotalEpisodes = newData.totalEpisodes || 0;
+    
+    // 检查评分变化
+    if (Math.abs(oldScore - newScore) > 0.1) {
+      console.log(`📺 剧集评分变化: ${oldScore} -> ${newScore}`);
+      return true;
+    }
+    
+    // 检查集数信息变化
+    if (oldUpdateEP !== newUpdateEP) {
+      console.log(`📺 更新集数变化: "${oldUpdateEP}" -> "${newUpdateEP}"`);
+      return true;
+    }
+    
+    // 检查总集数变化
+    if (oldTotalEpisodes !== newTotalEpisodes) {
+      console.log(`📺 总集数变化: ${oldTotalEpisodes} -> ${newTotalEpisodes}`);
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// 保存剧集数据 - 修正版本：detail是总简介，不是每集简介
+async function saveEpisodesData(videoId, safeData, videoDetail) {
+  try {
     let episodes = [];
     const videoPid = safeData.pID;
     const videoType = safeData.videoType;
     
-  //  console.log(`📋 处理剧集: ${safeData.name}, 类型: ${videoType}, updateEP: ${safeData.updateEP}`);
+    console.log(`🎬 处理剧集: ${safeData.name}, 类型: ${videoType}`);
     
-    // 方式1: 从 extraData.episodes 获取剧集ID
-    if (originalData.extraData && originalData.extraData.episodes && Array.isArray(originalData.extraData.episodes)) {
-      const episodeIds = originalData.extraData.episodes;
-  //  console.log(`  从 extraData 获取 ${episodeIds.length} 个剧集ID`);
+    // 从详情数据获取剧集信息
+    if (videoDetail && videoDetail.datas && Array.isArray(videoDetail.datas)) {
+      console.log(`📋 从详情获取 ${videoDetail.datas.length} 个剧集`);
+      
+      episodes = videoDetail.datas.map((episodeData, index) => {
+        const episodeId = episodeData.pID || `${videoPid}_${index + 1}`;
+        const episodeName = episodeData.name || `第${index + 1}集`;
+        const episodeIndex = episodeData.index ? parseInt(episodeData.index) : index + 1;
+        
+        return {
+          episodeId: episodeId,
+          episodeName: episodeName,
+          episodeIndex: episodeIndex,
+          // 注意：这里不使用 episodeData.detail，因为那是总简介
+          // 每集的简介通常为空，或者有单独的字段
+          detail: '', // 每集的详细描述通常为空
+          duration: episodeData.duration || '',
+          assetId: episodeData.assetID || '',
+          programId: episodeData.pID || '',
+          displayType: episodeData.displayType || safeData.contDisplayType
+        };
+      });
+    }
+    // 从 extraData.episodes 获取剧集ID
+    else if (safeData.extraData && safeData.extraData.episodes && Array.isArray(safeData.extraData.episodes)) {
+      const episodeIds = safeData.extraData.episodes;
+      console.log(`📋 从extraData获取 ${episodeIds.length} 个剧集ID`);
       
       episodes = episodeIds.map((episodeId, index) => {
-        // 尝试从 episodeList 获取剧集名称
         let episodeName = `第${index + 1}集`;
-        if (originalData.extraData.episodeList && originalData.extraData.episodeList[index]) {
-          const episodeInfo = originalData.extraData.episodeList[index];
-          // 清理名称，移除《》和视频名称
-          episodeName = episodeInfo.name
-            .replace(/《[^》]*》/, '')
-            .replace(safeData.name, '')
-            .trim() || `第${index + 1}集`;
+        
+        // 尝试从 episodeList 获取剧集名称
+        if (safeData.extraData.episodeList && safeData.extraData.episodeList[index]) {
+          const episodeInfo = safeData.extraData.episodeList[index];
+          episodeName = episodeInfo.name || `第${index + 1}集`;
         }
         
         return {
           episodeId: episodeId,
           episodeName: episodeName,
-          episodeIndex: index + 1
+          episodeIndex: index + 1,
+          detail: '',
+          duration: '',
+          assetId: '',
+          programId: episodeId,
+          displayType: safeData.contDisplayType
         };
       });
     }
-    // 方式2: 从 updateEP 推断集数（电视剧/动漫）
+    // 从 updateEP 推断集数（电视剧/动漫）
     else if (videoType === 'tv' || videoType === 'anime') {
       const totalEpisodes = safeData.totalEpisodes;
       if (totalEpisodes > 1) {
-   //     console.log(`  根据总集数创建 ${totalEpisodes} 个剧集`);
+        console.log(`📋 根据总集数创建 ${totalEpisodes} 个剧集`);
         for (let i = 0; i < totalEpisodes; i++) {
           episodes.push({
             episodeId: `${videoPid}_${i + 1}`,
             episodeName: `第${i + 1}集`,
-            episodeIndex: i + 1
+            episodeIndex: i + 1,
+            detail: '',
+            duration: '',
+            assetId: '',
+            programId: `${videoPid}_${i + 1}`,
+            displayType: safeData.contDisplayType
           });
         }
       } else {
         episodes.push({
           episodeId: videoPid,
           episodeName: '第1集',
-          episodeIndex: 1
+          episodeIndex: 1,
+          detail: '',
+          duration: '',
+          assetId: '',
+          programId: videoPid,
+          displayType: safeData.contDisplayType
         });
       }
     }
-    // 方式3: 电影和其他类型
+    // 电影和其他类型
     else {
       episodes.push({
         episodeId: videoPid,
         episodeName: videoType === 'movie' ? '正片' : '全集',
-        episodeIndex: 1
+        episodeIndex: 1,
+        detail: '', // 电影的detail已经在videos表中保存
+        duration: '',
+        assetId: '',
+        programId: videoPid,
+        displayType: safeData.contDisplayType
       });
     }
     
-  //  console.log(`📝 准备保存 ${episodes.length} 个剧集`);
+    console.log(`📝 准备保存 ${episodes.length} 个剧集`);
     
     // 保存剧集到数据库
     let savedCount = 0;
     for (const episode of episodes) {
       try {
-   //     console.log(`  保存剧集: ${episode.episodeName} (ID: ${episode.episodeId})`);
-        const result = await executeSQL(`
-          INSERT OR REPLACE INTO episodes 
-          (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
-          VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-        `, [videoId, episode.episodeId, episode.episodeName, episode.episodeIndex]);
+        // 检查剧集是否已存在
+        const existingEpisode = await executeSQL(
+          'SELECT id FROM episodes WHERE video_id = ? AND episode_id = ?',
+          [videoId, episode.episodeId]
+        );
         
-   //     console.log(`    ✅ 剧集保存成功`);
+        if (existingEpisode && existingEpisode.result && existingEpisode.result[0] && existingEpisode.result[0].results && existingEpisode.result[0].results.length > 0) {
+          // 更新现有剧集
+          await executeSQL(`
+            UPDATE episodes SET
+              episode_name = ?, episode_index = ?, detail = ?, duration = ?, asset_id = ?, program_id = ?, display_type = ?, updated_at = datetime('now')
+            WHERE video_id = ? AND episode_id = ?
+          `, [
+            episode.episodeName,
+            episode.episodeIndex,
+            episode.detail,
+            episode.duration,
+            episode.assetId,
+            episode.programId,
+            episode.displayType,
+            videoId,
+            episode.episodeId
+          ]);
+        } else {
+          // 新增剧集
+          await executeSQL(`
+            INSERT INTO episodes 
+            (video_id, episode_id, episode_name, episode_index, detail, duration, asset_id, program_id, display_type, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+          `, [
+            videoId,
+            episode.episodeId,
+            episode.episodeName,
+            episode.episodeIndex,
+            episode.detail,
+            episode.duration,
+            episode.assetId,
+            episode.programId,
+            episode.displayType
+          ]);
+        }
+        
         savedCount++;
       } catch (episodeError) {
-        console.error(`   ❌ 保存剧集失败 ${episode.episodeName}:`, episodeError.message);
+        console.error(`❌ 保存剧集失败 ${episode.episodeName}:`, episodeError.message);
       }
     }
     
@@ -288,33 +497,36 @@ function calculateTotalEpisodes(videoData) {
   return 1;
 }
 
-function prepareVideoData(videoData, categoryId) {
+// 准备视频数据 - 修正版本：detail是总简介
+function prepareVideoData(videoData, categoryId, videoDetail = null) {
   // 智能判断视频类型
   const videoType = determineVideoType(videoData, categoryId);
   
+  // 使用详情数据中的信息（如果可用）
+  const detailInfo = videoDetail || {};
+  const mainData = videoDetail?.datas?.[0] || videoData;
+
   const safeData = {
     pID: videoData.pID || 'unknown_' + Date.now(),
-    name: videoData.name || '未知名称',
-    subTitle: videoData.subTitle || '',
-    pics: videoData.pics || {},
-    programType: videoData.programType || '',
-    score: videoData.score || '',
-    year: videoData.year || '',
-    // 🔥 修复：使用 mediaArea 字段
-    area: videoData.mediaArea || videoData.area || '',
-    language: videoData.language || '',
-    // 🔥 修复：去除前后空格
-    director: (videoData.director || '').trim(),
-    actor: (videoData.actor || '').trim(),
-    contentStyle: (videoData.contentStyle || '').trim(),
+    name: mainData.name || '未知名称',
+    subTitle: mainData.subTitle || '',
+    pics: mainData.pics || videoData.pics || {},
+    programType: mainData.programType || videoData.programType || '',
+    score: detailInfo.score || videoData.score || '',
+    year: detailInfo.year || videoData.year || '',
+    area: detailInfo.area || videoData.mediaArea || videoData.area || '',
+    language: detailInfo.language || videoData.language || '',
+    director: (detailInfo.director || videoData.director || '').trim(),
+    actor: (detailInfo.actor || videoData.actor || '').trim(),
+    contentStyle: (detailInfo.contentStyle || videoData.contentStyle || '').trim(),
     updateEP: videoData.updateEP || '',
     recommendation: videoData.recommendation || [],
     publishTime: videoData.publishTime || '',
-    way: videoData.way || '',
-    auth: videoData.auth || '',
+    way: mainData.way || videoData.way || '',
+    auth: mainData.auth || videoData.auth || '',
     contDisplayName: videoData.contDisplayName || '',
     contentType: videoData.contentType || '',
-    assetId: videoData.assetID || videoData.assetId || '',
+    assetId: mainData.assetID || videoData.assetID || videoData.assetId || '',
     publishTimestamp: videoData.publishTimestamp || '',
     sourcePublishTime: videoData.publishTime || '',
     sourcePublishTimestamp: videoData.publishTimestamp || '',
@@ -322,27 +534,35 @@ function prepareVideoData(videoData, categoryId) {
     videoType: videoType,
     totalEpisodes: calculateTotalEpisodes(videoData),
     
-    // 🔥 新增字段
-    wcKeyword: videoData.wcKeyword || '',  // 关键词
-    playType: videoData.playType || '',     // 播放类型
-
-    createTime: videoData.createTime || '',       // 官方创建时间
-    publishDate: videoData.publishDate || 0,       // 官方发布时间戳
-
-    // 🔥 新增：付费类型字段
-    tipCode: videoData.tip?.code || '',
-    tipMsg: videoData.tip?.msg || '',
-    storeTipCode: videoData.storeTip?.code || '',
-    storeTipMsg: videoData.storeTip?.msg || ''
+    // 🔥 重要修正：detail 是整个视频的总简介，不是每集的简介
+    detail: detailInfo.detail || '', // 使用顶层的detail，这是总简介
     
+    // 关键词和播放类型
+    wcKeyword: mainData.KEYWORDS || videoData.wcKeyword || '',
+    playType: mainData.playType || videoData.playType || '',
+
+    // 时间相关
+    createTime: videoData.createTime || '',
+    publishDate: videoData.publishDate || 0,
+
+    // 付费类型字段
+    tipCode: mainData.tip?.code || videoData.tip?.code || '',
+    tipMsg: mainData.tip?.msg || videoData.tip?.msg || '',
+    storeTipCode: mainData.storeTip?.code || videoData.storeTip?.code || '',
+    storeTipMsg: mainData.storeTip?.msg || videoData.storeTip?.msg || '',
+    
+    // 额外数据
+    extraData: videoData.extraData || {}
   };
 
-  //console.log(`📊 视频数据: ${safeData.name}`);
-  //console.log(`  地区: "${safeData.area}", 关键词: "${safeData.wcKeyword}", 播放类型: "${safeData.playType}"`);
+  console.log(`📊 视频数据: ${safeData.name}`);
+  console.log(`  类型: ${safeData.videoType}, 地区: "${safeData.area}", 评分: ${safeData.score}, 集数: ${safeData.totalEpisodes}`);
+  console.log(`  详情长度: ${safeData.detail ? safeData.detail.length : 0} 字符`);
 
   return safeData;
 }
 
+// 获取视频绑定参数
 function getVideoBindParams(safeData) {
   const picUrl = getHighQualityPic(safeData.pics) || '';
   const picUrlH = safeData.pics.highResolutionH || safeData.pics.lowResolutionH || '';
@@ -356,7 +576,9 @@ function getVideoBindParams(safeData) {
   const recommendationJson = JSON.stringify(safeData.recommendation);
   
   const extraDataJson = JSON.stringify({
-   
+    detail: safeData.detail, // 总简介也保存在extra_data中备份
+    episodes: safeData.extraData.episodes || [],
+    episodeList: safeData.extraData.episodeList || []
   });
 
   return [
@@ -393,18 +615,62 @@ function getVideoBindParams(safeData) {
     safeData.sourcePublishTimestamp,    // 31. source_publish_timestamp
     safeData.videoType,                 // 32. video_type
     safeData.wcKeyword,                 // 33. wc_keyword
-    safeData.playType,                   // 34. play_type
-    safeData.createTime,                // 🔥 第35个: create_time
-    safeData.publishDate,                // 🔥 第36个: publish_date
-    // 🔥 新增：付费类型字段
+    safeData.playType,                  // 34. play_type
+    safeData.createTime,                // 35. create_time
+    safeData.publishDate,               // 36. publish_date
     safeData.tipCode,                   // 37. tip_code
     safeData.tipMsg,                    // 38. tip_msg
     safeData.storeTipCode,              // 39. store_tip_code
-    safeData.storeTipMsg                // 40. store_tip_msg
+    safeData.storeTipMsg,               // 40. store_tip_msg
+    safeData.detail                     // 41. detail (总简介)
   ];
 }
 
+// 获取高质量图片
 function getHighQualityPic(pics) {
   return pics.highResolutionH || pics.lowResolutionH || 
          pics.highResolutionV || pics.lowResolutionV || '';
+}
+
+// 批量处理视频数据
+export async function processVideoBatch(videoList, categoryId) {
+  const results = {
+    total: videoList.length,
+    success: 0,
+    failed: 0,
+    details: []
+  };
+  
+  for (const videoData of videoList) {
+    try {
+      const success = await saveVideoData(videoData, categoryId);
+      
+      if (success) {
+        results.success++;
+        results.details.push({
+          name: videoData.name,
+          status: 'success',
+          message: '保存成功'
+        });
+      } else {
+        results.failed++;
+        results.details.push({
+          name: videoData.name,
+          status: 'failed',
+          message: '保存失败'
+        });
+      }
+    } catch (error) {
+      results.failed++;
+      results.details.push({
+        name: videoData.name,
+        status: 'error',
+        message: error.message
+      });
+      console.error(`❌ 处理视频失败 ${videoData.name}:`, error.message);
+    }
+  }
+  
+  console.log(`📊 批量处理完成: 成功 ${results.success}/${results.total}, 失败 ${results.failed}`);
+  return results;
 }
