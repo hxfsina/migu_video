@@ -59,7 +59,7 @@ async function fullSyncAllCategories() {
         
         console.log(`📄 同步分类 ${categoryName} 第 ${currentPage} 页`);
         
-        const videos = await fetchMiguCategory(cid, currentPage, 20);
+        const videos = await fetchMiguCategory(cid, currentPage, 10);
         
         // 如果没有数据或数据为空，停止同步
         if (!videos || videos.length === 0) {
