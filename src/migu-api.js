@@ -267,6 +267,9 @@ async function shouldUpdateVideo(existingVideo, newData) {
 }
 
 // 保存剧集数据 - 修正版本：detail是总简介，不是每集简介
+// 在 saveEpisodesData 函数中，修改剧集保存逻辑：
+
+// 保存剧集数据 - 简化版本：不需要每集的detail
 async function saveEpisodesData(videoId, safeData, videoDetail) {
   try {
     let episodes = [];
@@ -287,14 +290,7 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
         return {
           episodeId: episodeId,
           episodeName: episodeName,
-          episodeIndex: episodeIndex,
-          // 注意：这里不使用 episodeData.detail，因为那是总简介
-          // 每集的简介通常为空，或者有单独的字段
-          detail: '', // 每集的详细描述通常为空
-          duration: episodeData.duration || '',
-          assetId: episodeData.assetID || '',
-          programId: episodeData.pID || '',
-          displayType: episodeData.displayType || safeData.contDisplayType
+          episodeIndex: episodeIndex
         };
       });
     }
@@ -315,12 +311,7 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
         return {
           episodeId: episodeId,
           episodeName: episodeName,
-          episodeIndex: index + 1,
-          detail: '',
-          duration: '',
-          assetId: '',
-          programId: episodeId,
-          displayType: safeData.contDisplayType
+          episodeIndex: index + 1
         };
       });
     }
@@ -333,24 +324,14 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
           episodes.push({
             episodeId: `${videoPid}_${i + 1}`,
             episodeName: `第${i + 1}集`,
-            episodeIndex: i + 1,
-            detail: '',
-            duration: '',
-            assetId: '',
-            programId: `${videoPid}_${i + 1}`,
-            displayType: safeData.contDisplayType
+            episodeIndex: i + 1
           });
         }
       } else {
         episodes.push({
           episodeId: videoPid,
           episodeName: '第1集',
-          episodeIndex: 1,
-          detail: '',
-          duration: '',
-          assetId: '',
-          programId: videoPid,
-          displayType: safeData.contDisplayType
+          episodeIndex: 1
         });
       }
     }
@@ -359,18 +340,13 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
       episodes.push({
         episodeId: videoPid,
         episodeName: videoType === 'movie' ? '正片' : '全集',
-        episodeIndex: 1,
-        detail: '', // 电影的detail已经在videos表中保存
-        duration: '',
-        assetId: '',
-        programId: videoPid,
-        displayType: safeData.contDisplayType
+        episodeIndex: 1
       });
     }
     
     console.log(`📝 准备保存 ${episodes.length} 个剧集`);
     
-    // 保存剧集到数据库
+    // 保存剧集到数据库 - 只保存基本信息
     let savedCount = 0;
     for (const episode of episodes) {
       try {
@@ -384,16 +360,11 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
           // 更新现有剧集
           await executeSQL(`
             UPDATE episodes SET
-              episode_name = ?, episode_index = ?, detail = ?, duration = ?, asset_id = ?, program_id = ?, display_type = ?, updated_at = datetime('now')
+              episode_name = ?, episode_index = ?, updated_at = datetime('now')
             WHERE video_id = ? AND episode_id = ?
           `, [
             episode.episodeName,
             episode.episodeIndex,
-            episode.detail,
-            episode.duration,
-            episode.assetId,
-            episode.programId,
-            episode.displayType,
             videoId,
             episode.episodeId
           ]);
@@ -401,18 +372,13 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
           // 新增剧集
           await executeSQL(`
             INSERT INTO episodes 
-            (video_id, episode_id, episode_name, episode_index, detail, duration, asset_id, program_id, display_type, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
           `, [
             videoId,
             episode.episodeId,
             episode.episodeName,
-            episode.episodeIndex,
-            episode.detail,
-            episode.duration,
-            episode.assetId,
-            episode.programId,
-            episode.displayType
+            episode.episodeIndex
           ]);
         }
         
