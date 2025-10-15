@@ -1,4 +1,4 @@
-import { executeSQL, checkEnv } from './db.js';
+import { checkEnv } from './db.js';
 import { fetchMiguCategory, processVideoBatch } from './migu-api.js';
 
 async function fullSyncAllCategories() {
@@ -6,7 +6,7 @@ async function fullSyncAllCategories() {
   
   // 同步配置
   const pageLimit = 1; // 0=全量，1=测试，其他数字=限制页数
-  const delayMs = 2000;
+  const delayMs = 1000; // 降低延迟
   
   // 同步模式说明
   let syncMode = pageLimit === 0 ? '全量模式(所有页面)' : 
@@ -23,9 +23,12 @@ async function fullSyncAllCategories() {
   };
   
   const results = {};
+  const startTime = Date.now();
   
   for (const cid of allCategories) {
     const categoryName = categoryNames[cid] || cid;
+    const categoryStartTime = Date.now();
+    
     console.log(`\n📁 开始同步分类: ${categoryName} (${cid})`);
     
     try {
@@ -63,14 +66,16 @@ async function fullSyncAllCategories() {
         }
       }
       
+      const categoryDuration = Date.now() - categoryStartTime;
       results[cid] = {
         name: categoryName,
         videos: categoryVideos,
         pages: currentPage - 1,
-        status: 'completed'
+        status: 'completed',
+        duration: categoryDuration
       };
       
-      console.log(`🎉 分类 ${categoryName} 同步完成: ${categoryVideos} 个视频`);
+      console.log(`🎉 分类 ${categoryName} 同步完成: ${categoryVideos} 个视频 (耗时: ${categoryDuration}ms)`);
       
     } catch (error) {
       console.error(`❌ 分类 ${categoryName} 同步失败:`, error);
@@ -85,21 +90,36 @@ async function fullSyncAllCategories() {
     
     // 分类间延迟
     if (cid !== allCategories[allCategories.length - 1]) {
-      console.log(`⏳ 等待 3 秒后开始下一个分类...`);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log(`⏳ 等待 2 秒后开始下一个分类...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
   
   // 输出最终结果
-  console.log(`\n🎊 所有分类同步完成!`);
+  const totalDuration = Date.now() - startTime;
+  console.log(`\n🎊 所有分类同步完成! (总耗时: ${totalDuration}ms)`);
   console.log(`📊 详细结果:`);
+  
+  let totalVideos = 0;
+  let totalPages = 0;
+  
   Object.values(results).forEach(result => {
     const statusIcon = result.status === 'completed' ? '✅' : '❌';
-    console.log(`${statusIcon} ${result.name}: ${result.videos} 个视频, ${result.pages} 页`);
+    console.log(`${statusIcon} ${result.name}: ${result.videos} 个视频, ${result.pages} 页${result.duration ? ` (${result.duration}ms)` : ''}`);
+    
     if (result.error) {
       console.log(`   错误: ${result.error}`);
     }
+    
+    totalVideos += result.videos;
+    totalPages += result.pages;
   });
+  
+  console.log(`\n📈 统计汇总:`);
+  console.log(`   总视频: ${totalVideos} 个`);
+  console.log(`   总页数: ${totalPages} 页`);
+  console.log(`   总耗时: ${totalDuration}ms`);
+  console.log(`   平均速度: ${(totalVideos / (totalDuration / 1000)).toFixed(2)} 视频/秒`);
 }
 
 // 执行同步
