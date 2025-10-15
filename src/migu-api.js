@@ -4,7 +4,7 @@ import { executeSQL } from './db.js';
 // 从咪咕API获取分类数据
 export async function fetchMiguCategory(cid, page, pageSize, filters = {}) {
   const apiBase = 'https://jadeiteapp.migu.cn';
-  const baseParams = 'packId=1002581,1003861,1003863,1003866,1002601,1004761,1004121,1004641,1005521,1005261,1015768&copyrightTerminal=3';
+  const baseParams = 'packId=1002581,1003861,1003863,1003866,1002601,1004761,1004121,1004641,1005521,1005261,1015768&uiVersion=A3.31.0';
   
   // 构建查询参数
   let url = `${apiBase}/search/v3/category?${baseParams}&pageStart=${page}&pageNum=${pageSize}&contDisplayType=${cid}`;
