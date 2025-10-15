@@ -1,5 +1,9 @@
 import fetch from 'node-fetch';
-import { executeSQL } from './db.js';
+import { executeSQL, batchInsertEpisodes } from './db.js';
+
+// 缓存机制
+const videoCache = new Map();
+const episodeCache = new Map();
 
 // 从咪咕API获取分类数据
 export async function fetchMiguCategory(cid, page, pageSize, filters = {}) {
@@ -24,7 +28,7 @@ export async function fetchMiguCategory(cid, page, pageSize, filters = {}) {
   }
   
   try {
-    console.log(`🔗 请求URL: ${url.replace(/(pageStart=)\d+/, '$1' + page)}`);
+    console.log(`🔗 请求分类 ${cid} 第 ${page} 页数据`);
     
     const response = await fetch(url, {
       headers: {
@@ -85,7 +89,6 @@ export async function fetchVideoDetail(pId) {
       return null;
     }
     
-    console.log(`✅ 获取视频详情成功: ${pId}`);
     return data.body?.data || null;
     
   } catch (error) {
@@ -97,7 +100,7 @@ export async function fetchVideoDetail(pId) {
 // 并行获取多个视频详情
 export async function fetchVideoDetailsParallel(videoList) {
   const details = {};
-  const batchSize = 5; // 控制并发数
+  const batchSize = 3; // 降低并发数避免被限制
   
   console.log(`🚀 开始并行获取 ${videoList.length} 个视频详情`);
   
@@ -125,7 +128,7 @@ export async function fetchVideoDetailsParallel(videoList) {
     
     // 避免请求过快
     if (i + batchSize < videoList.length) {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
   
@@ -133,147 +136,11 @@ export async function fetchVideoDetailsParallel(videoList) {
   return details;
 }
 
-// 保存视频数据 - 主要逻辑
-export async function saveVideoData(videoData, categoryId, videoDetail = null) {
-  let transactionStarted = false;
-  
-  try {
-    // 开始事务
-    await executeSQL('BEGIN TRANSACTION');
-    transactionStarted = true;
-    
-    const result = await saveVideoDataInTransaction(videoData, categoryId, videoDetail);
-    
-    // 提交事务
-    await executeSQL('COMMIT');
-    transactionStarted = false;
-    
-    return result;
-    
-  } catch (error) {
-    // 回滚事务
-    if (transactionStarted) {
-      try {
-        await executeSQL('ROLLBACK');
-      } catch (rollbackError) {
-        console.error('❌ 回滚事务失败:', rollbackError.message);
-      }
-    }
-    console.error(`❌ 保存视频失败 ${videoData.name}:`, error.message);
-    return false;
-  }
-}
-
-// 在事务中保存视频数据
-async function saveVideoDataInTransaction(videoData, categoryId, videoDetail = null) {
-  // 检查视频是否已存在
-  const existingVideo = await checkVideoExists(videoData.pID);
-  
-  // 如果没有提供详情，则获取
-  if (!videoDetail) {
-    videoDetail = await fetchVideoDetail(videoData.pID);
-  }
-  
-  const safeData = prepareVideoData(videoData, categoryId, videoDetail);
-  
-  // 判断是否需要更新
-  const shouldUpdate = await shouldUpdateVideo(existingVideo, safeData);
-  
-  if (!shouldUpdate && existingVideo) {
-    console.log(`⏭️  跳过更新: ${safeData.name} (无变化)`);
-    return true;
-  }
-  
-  const bindParams = getVideoBindParams(safeData);
-  
-  if (existingVideo && shouldUpdate) {
-    // 更新现有记录
-    await executeSQL(`
-      UPDATE videos SET
-        name = ?, sub_title = ?, pic_url = ?, pic_url_h = ?, pic_url_v = ?,
-        program_type = ?, cont_display_type = ?, cont_display_name = ?, cont_type = ?,
-        score = ?, year = ?, area = ?, language = ?, director = ?, actor = ?,
-        content_style = ?, vod_remarks = ?, update_ep = ?, total_episodes = ?,
-        is_4k = ?, is_original = ?, way = ?, auth = ?, asset_id = ?,
-        publish_time = ?, publish_timestamp = ?, recommendation = ?, extra_data = ?,
-        source_publish_time = ?, source_publish_timestamp = ?,
-        video_type = ?, wc_keyword = ?, play_type = ?, create_time = ?, publish_date = ?,
-        tip_code = ?, tip_msg = ?, store_tip_code = ?, store_tip_msg = ?,
-        detail = ?, updated_at = datetime('now')
-      WHERE p_id = ?
-    `, [...bindParams.slice(1), safeData.pID]);
-    
-    console.log(`🔄 更新视频成功: ${safeData.name}`);
-  } else {
-    // 新增记录
-    await executeSQL(`
-      INSERT INTO videos (
-        p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
-        program_type, cont_display_type, cont_display_name, cont_type,
-        score, year, area, language, director, actor,
-        content_style, vod_remarks, update_ep, total_episodes, 
-        is_4k, is_original, way, auth, asset_id, 
-        publish_time, publish_timestamp, recommendation, extra_data,
-        source_publish_time, source_publish_timestamp,
-        video_type, wc_keyword, play_type, create_time, publish_date,
-        tip_code, tip_msg, store_tip_code, store_tip_msg, detail,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `, bindParams);
-    
-    console.log(`✅ 新增视频成功: ${safeData.name}`);
-  }
-  
-  // 获取视频ID
-  const result = await executeSQL(
-    'SELECT id FROM videos WHERE p_id = ?',
-    [safeData.pID]
-  );
-  
-  let videoId = null;
-  if (result && result.result && result.result[0] && result.result[0].results && result.result[0].results.length > 0) {
-    videoId = result.result[0].results[0].id;
-  }
-  
-  if (videoId) {
-    // 更新搜索索引
-    await executeSQL(`
-      INSERT OR REPLACE INTO search_index (video_id, name, sub_title, director, actor, content_style, wc_keyword)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [
-      videoId, 
-      safeData.name, 
-      safeData.subTitle, 
-      safeData.director, 
-      safeData.actor, 
-      safeData.contentStyle,
-      safeData.wcKeyword
-    ]);
-    
-    // 保存剧集信息 - 只在新增或剧集类更新时处理
-    if (!existingVideo || safeData.videoType !== 'movie') {
-      const startTime = Date.now();
-      const episodesSaved = await saveEpisodesDataWithMetrics(videoId, safeData, videoDetail);
-      const duration = Date.now() - startTime;
-      
-      if (episodesSaved) {
-        console.log(`🎬 视频 ${safeData.name} 剧集保存成功 (耗时: ${duration}ms)`);
-      }
-      
-      if (duration > 5000) {
-        console.warn(`⚠️ 剧集保存较慢: ${duration}ms, 视频: ${safeData.name}`);
-      }
-    }
-  }
-  
-  return true;
-}
-
 // 检查视频是否已存在
 async function checkVideoExists(pId) {
   try {
     const result = await executeSQL(
-      'SELECT id, score, update_ep, total_episodes FROM videos WHERE p_id = ?',
+      'SELECT id, p_id, score, update_ep, total_episodes FROM videos WHERE p_id = ?',
       [pId]
     );
     
@@ -299,7 +166,6 @@ async function shouldUpdateVideo(existingVideo, newData) {
     const newScore = parseFloat(newData.score) || 0;
     
     if (Math.abs(oldScore - newScore) > 0.1) {
-      console.log(`🎬 电影评分变化: ${oldScore} -> ${newScore}`);
       return true;
     }
   } 
@@ -314,231 +180,21 @@ async function shouldUpdateVideo(existingVideo, newData) {
     
     // 检查评分变化
     if (Math.abs(oldScore - newScore) > 0.1) {
-      console.log(`📺 剧集评分变化: ${oldScore} -> ${newScore}`);
       return true;
     }
     
     // 检查集数信息变化
     if (oldUpdateEP !== newUpdateEP) {
-      console.log(`📺 更新集数变化: "${oldUpdateEP}" -> "${newUpdateEP}"`);
       return true;
     }
     
     // 检查总集数变化
     if (oldTotalEpisodes !== newTotalEpisodes) {
-      console.log(`📺 总集数变化: ${oldTotalEpisodes} -> ${newTotalEpisodes}`);
       return true;
     }
   }
   
   return false;
-}
-
-// 缓存机制
-const episodeCache = new Map();
-
-// 带性能监控的剧集保存
-async function saveEpisodesDataWithMetrics(videoId, safeData, videoDetail) {
-  const startTime = Date.now();
-  
-  try {
-    const cacheKey = `${videoId}_${safeData.pID}`;
-    
-    // 检查缓存（5分钟有效期）
-    if (episodeCache.has(cacheKey)) {
-      const cached = episodeCache.get(cacheKey);
-      if (cached.timestamp > Date.now() - 5 * 60 * 1000) {
-        console.log(`📦 使用缓存剧集数据: ${safeData.name}`);
-        return true;
-      }
-    }
-    
-    const result = await saveEpisodesData(videoId, safeData, videoDetail);
-    
-    // 更新缓存
-    if (result) {
-      episodeCache.set(cacheKey, {
-        timestamp: Date.now(),
-        videoId: videoId
-      });
-    }
-    
-    const duration = Date.now() - startTime;
-    console.log(`⏱️ 剧集保存耗时: ${duration}ms, 视频: ${safeData.name}`);
-    
-    return result;
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ 剧集保存失败, 耗时: ${duration}ms`, error.message);
-    return false;
-  }
-}
-
-// 保存剧集数据 - 批量优化版本
-async function saveEpisodesData(videoId, safeData, videoDetail) {
-  try {
-    let episodes = prepareEpisodesData(videoId, safeData, videoDetail);
-    
-    if (episodes.length === 0) {
-      episodes.push(createDefaultEpisode(videoId, safeData));
-    }
-    
-    console.log(`📝 准备批量保存 ${episodes.length} 个剧集`);
-    
-    // 批量处理，每批50个
-    const batchSize = 50;
-    let totalSaved = 0;
-    
-    for (let i = 0; i < episodes.length; i += batchSize) {
-      const batch = episodes.slice(i, i + batchSize);
-      const savedInBatch = await saveEpisodesBatch(videoId, batch);
-      totalSaved += savedInBatch;
-      
-      console.log(`📦 批量保存进度: ${Math.min(i + batchSize, episodes.length)}/${episodes.length}`);
-    }
-    
-    console.log(`🎬 成功保存 ${totalSaved}/${episodes.length} 个剧集`);
-    return totalSaved > 0;
-    
-  } catch (error) {
-    console.error('❌ 保存剧集失败:', error.message);
-    return false;
-  }
-}
-
-// 批量保存剧集
-async function saveEpisodesBatch(videoId, episodes) {
-  if (episodes.length === 0) return 0;
-  
-  try {
-    // 使用 INSERT OR REPLACE 一次性处理
-    const placeholders = episodes.map(() => '(?, ?, ?, ?, datetime("now"), datetime("now"))').join(',');
-    const values = episodes.flatMap(ep => [
-      videoId, ep.episodeId, ep.episodeName, ep.episodeIndex
-    ]);
-    
-    await executeSQL(`
-      INSERT OR REPLACE INTO episodes 
-      (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
-      VALUES ${placeholders}
-    `, values);
-    
-    return episodes.length;
-    
-  } catch (error) {
-    console.error('❌ 批量保存剧集失败，降级为逐条插入:', error.message);
-    
-    // 降级方案：逐条插入
-    return await saveEpisodesOneByOne(videoId, episodes);
-  }
-}
-
-// 降级方案：逐条插入
-async function saveEpisodesOneByOne(videoId, episodes) {
-  let savedCount = 0;
-  
-  for (const episode of episodes) {
-    try {
-      await executeSQL(`
-        INSERT OR REPLACE INTO episodes 
-        (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-      `, [videoId, episode.episodeId, episode.episodeName, episode.episodeIndex]);
-      
-      savedCount++;
-    } catch (episodeError) {
-      console.error(`❌ 保存剧集失败 ${episode.episodeName}:`, episodeError.message);
-    }
-  }
-  
-  return savedCount;
-}
-
-// 准备剧集数据
-function prepareEpisodesData(videoId, safeData, videoDetail) {
-  const episodes = [];
-  const videoPid = safeData.pID;
-  const videoType = safeData.videoType;
-  
-  // 1. 优先从详情API获取
-  if (videoDetail?.datas?.length > 0) {
-    episodes.push(...processDetailEpisodes(videoDetail.datas, videoPid));
-  }
-  
-  // 2. 从extraData获取
-  if (episodes.length === 0 && safeData.extraData?.episodes?.length > 0) {
-    episodes.push(...processExtraDataEpisodes(safeData.extraData, videoPid));
-  }
-  
-  // 3. 根据视频类型生成默认剧集
-  if (episodes.length === 0) {
-    episodes.push(...generateDefaultEpisodes(videoType, videoPid, safeData.totalEpisodes));
-  }
-  
-  return episodes;
-}
-
-// 处理详情剧集数据
-function processDetailEpisodes(detailDatas, videoPid) {
-  return detailDatas.map((episodeData, index) => ({
-    episodeId: episodeData.pID || `${videoPid}_${index + 1}`,
-    episodeName: episodeData.name || `第${index + 1}集`,
-    episodeIndex: episodeData.index ? parseInt(episodeData.index) : index + 1
-  }));
-}
-
-// 处理extraData剧集
-function processExtraDataEpisodes(extraData, videoPid) {
-  return extraData.episodes.map((episodeId, index) => {
-    let episodeName = `第${index + 1}集`;
-    
-    if (extraData.episodeList?.[index]) {
-      episodeName = extraData.episodeList[index].name || episodeName;
-    }
-    
-    return {
-      episodeId: episodeId,
-      episodeName: episodeName,
-      episodeIndex: index + 1
-    };
-  });
-}
-
-// 生成默认剧集
-function generateDefaultEpisodes(videoType, videoPid, totalEpisodes) {
-  const episodes = [];
-  
-  if (videoType === 'movie') {
-    episodes.push({
-      episodeId: videoPid,
-      episodeName: '正片',
-      episodeIndex: 1
-    });
-  } else if (totalEpisodes > 1) {
-    for (let i = 0; i < totalEpisodes; i++) {
-      episodes.push({
-        episodeId: `${videoPid}_${i + 1}`,
-        episodeName: `第${i + 1}集`,
-        episodeIndex: i + 1
-      });
-    }
-  } else {
-    episodes.push({
-      episodeId: videoPid,
-      episodeName: '第1集',
-      episodeIndex: 1
-    });
-  }
-  
-  return episodes;
-}
-
-function createDefaultEpisode(videoId, safeData) {
-  return {
-    episodeId: safeData.pID,
-    episodeName: safeData.videoType === 'movie' ? '正片' : '第1集',
-    episodeIndex: 1
-  };
 }
 
 // 智能判断视频类型
@@ -559,7 +215,7 @@ function determineVideoType(videoData, categoryId) {
   
   // 2. 根据集数信息判断
   if (updateEP.includes('集全') || updateEP.includes('更新至') || updateEP.includes('第') ) {
-    return 'tv'; // 有多集信息，判定为电视剧
+    return 'tv';
   }
   
   // 3. 根据节目类型判断
@@ -585,7 +241,7 @@ function determineVideoType(videoData, categoryId) {
     return 'tv';
   }
   
-  return 'movie'; // 默认判定为电影
+  return 'movie';
 }
 
 // 计算总集数
@@ -603,13 +259,11 @@ function calculateTotalEpisodes(videoData) {
     return match ? parseInt(match[1]) : 1;
   }
   
-  // 默认为单集
   return 1;
 }
 
 // 准备视频数据
 function prepareVideoData(videoData, categoryId, videoDetail = null) {
-  // 智能判断视频类型
   const videoType = determineVideoType(videoData, categoryId);
   
   const safeData = {
@@ -651,9 +305,6 @@ function prepareVideoData(videoData, categoryId, videoDetail = null) {
     extraData: videoData.extraData || {}
   };
 
-  console.log(`📊 视频数据: ${safeData.name}`);
-  console.log(`  类型: ${safeData.videoType}, 地区: "${safeData.area}", 评分: ${safeData.score}, 集数: ${safeData.totalEpisodes}`);
-
   return safeData;
 }
 
@@ -666,8 +317,7 @@ function getVideoBindParams(safeData) {
   const is4k = safeData.recommendation.includes('4K') ? 1 : 0;
   const isOriginal = safeData.recommendation.includes('原画') ? 1 : 0;
 
-  let totalEpisodes = safeData.totalEpisodes;
-
+  const totalEpisodes = safeData.totalEpisodes;
   const recommendationJson = JSON.stringify(safeData.recommendation);
   
   const extraDataJson = JSON.stringify({
@@ -727,8 +377,237 @@ function getHighQualityPic(pics) {
          pics.highResolutionV || pics.lowResolutionV || '';
 }
 
+// 保存视频数据 - 优化版本（无事务）
+export async function saveVideoData(videoData, categoryId, videoDetail = null) {
+  const startTime = Date.now();
+  
+  try {
+    // 检查缓存
+    const cacheKey = `${videoData.pID}_${categoryId}`;
+    if (videoCache.has(cacheKey)) {
+      const cached = videoCache.get(cacheKey);
+      if (cached.timestamp > Date.now() - 10 * 60 * 1000) { // 10分钟缓存
+        return true;
+      }
+    }
+
+    // 检查视频是否已存在
+    const existingVideo = await checkVideoExists(videoData.pID);
+    
+    // 如果没有提供详情，则获取
+    if (!videoDetail) {
+      videoDetail = await fetchVideoDetail(videoData.pID);
+    }
+    
+    const safeData = prepareVideoData(videoData, categoryId, videoDetail);
+    
+    // 判断是否需要更新
+    const shouldUpdate = await shouldUpdateVideo(existingVideo, safeData);
+    
+    if (!shouldUpdate && existingVideo) {
+      videoCache.set(cacheKey, { timestamp: Date.now() });
+      return true;
+    }
+    
+    const bindParams = getVideoBindParams(safeData);
+    
+    if (existingVideo && shouldUpdate) {
+      // 更新现有记录
+      await executeSQL(`
+        UPDATE videos SET
+          name = ?, sub_title = ?, pic_url = ?, pic_url_h = ?, pic_url_v = ?,
+          program_type = ?, cont_display_type = ?, cont_display_name = ?, cont_type = ?,
+          score = ?, year = ?, area = ?, language = ?, director = ?, actor = ?,
+          content_style = ?, vod_remarks = ?, update_ep = ?, total_episodes = ?,
+          is_4k = ?, is_original = ?, way = ?, auth = ?, asset_id = ?,
+          publish_time = ?, publish_timestamp = ?, recommendation = ?, extra_data = ?,
+          source_publish_time = ?, source_publish_timestamp = ?,
+          video_type = ?, wc_keyword = ?, play_type = ?, create_time = ?, publish_date = ?,
+          tip_code = ?, tip_msg = ?, store_tip_code = ?, store_tip_msg = ?,
+          detail = ?, updated_at = datetime('now')
+        WHERE p_id = ?
+      `, [...bindParams.slice(1), safeData.pID]);
+      
+      console.log(`🔄 更新视频: ${safeData.name}`);
+    } else {
+      // 新增记录
+      await executeSQL(`
+        INSERT INTO videos (
+          p_id, name, sub_title, pic_url, pic_url_h, pic_url_v,
+          program_type, cont_display_type, cont_display_name, cont_type,
+          score, year, area, language, director, actor,
+          content_style, vod_remarks, update_ep, total_episodes, 
+          is_4k, is_original, way, auth, asset_id, 
+          publish_time, publish_timestamp, recommendation, extra_data,
+          source_publish_time, source_publish_timestamp,
+          video_type, wc_keyword, play_type, create_time, publish_date,
+          tip_code, tip_msg, store_tip_code, store_tip_msg, detail,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `, bindParams);
+      
+      console.log(`✅ 新增视频: ${safeData.name}`);
+    }
+    
+    // 获取视频ID
+    const result = await executeSQL(
+      'SELECT id FROM videos WHERE p_id = ?',
+      [safeData.pID]
+    );
+    
+    let videoId = null;
+    if (result && result.result && result.result[0] && result.result[0].results && result.result[0].results.length > 0) {
+      videoId = result.result[0].results[0].id;
+    }
+    
+    if (videoId) {
+      // 更新搜索索引
+      await executeSQL(`
+        INSERT OR REPLACE INTO search_index (video_id, name, sub_title, director, actor, content_style, wc_keyword)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        videoId, 
+        safeData.name, 
+        safeData.subTitle, 
+        safeData.director, 
+        safeData.actor, 
+        safeData.contentStyle,
+        safeData.wcKeyword
+      ]);
+      
+      // 保存剧集信息
+      if (!existingVideo || safeData.videoType !== 'movie') {
+        await saveEpisodesData(videoId, safeData, videoDetail);
+      }
+    }
+    
+    // 更新缓存
+    videoCache.set(cacheKey, { timestamp: Date.now() });
+    
+    const duration = Date.now() - startTime;
+    if (duration > 1000) {
+      console.log(`⏱️ 视频保存耗时: ${duration}ms`);
+    }
+    
+    return true;
+    
+  } catch (error) {
+    console.error(`❌ 保存视频失败 ${videoData.name}:`, error.message);
+    return false;
+  }
+}
+
+// 准备剧集数据
+function prepareEpisodesData(videoId, safeData, videoDetail) {
+  const episodes = [];
+  const videoPid = safeData.pID;
+  const videoType = safeData.videoType;
+  
+  // 1. 优先从详情API获取
+  if (videoDetail?.datas?.length > 0) {
+    episodes.push(...videoDetail.datas.map((episodeData, index) => ({
+      episodeId: episodeData.pID || `${videoPid}_${index + 1}`,
+      episodeName: episodeData.name || `第${index + 1}集`,
+      episodeIndex: episodeData.index ? parseInt(episodeData.index) : index + 1
+    })));
+  }
+  
+  // 2. 从extraData获取
+  if (episodes.length === 0 && safeData.extraData?.episodes?.length > 0) {
+    episodes.push(...safeData.extraData.episodes.map((episodeId, index) => {
+      let episodeName = `第${index + 1}集`;
+      if (safeData.extraData.episodeList?.[index]) {
+        episodeName = safeData.extraData.episodeList[index].name || episodeName;
+      }
+      return {
+        episodeId: episodeId,
+        episodeName: episodeName,
+        episodeIndex: index + 1
+      };
+    }));
+  }
+  
+  // 3. 根据视频类型生成默认剧集
+  if (episodes.length === 0) {
+    if (videoType === 'movie') {
+      episodes.push({
+        episodeId: videoPid,
+        episodeName: '正片',
+        episodeIndex: 1
+      });
+    } else if (safeData.totalEpisodes > 1) {
+      for (let i = 0; i < safeData.totalEpisodes; i++) {
+        episodes.push({
+          episodeId: `${videoPid}_${i + 1}`,
+          episodeName: `第${i + 1}集`,
+          episodeIndex: i + 1
+        });
+      }
+    } else {
+      episodes.push({
+        episodeId: videoPid,
+        episodeName: '第1集',
+        episodeIndex: 1
+      });
+    }
+  }
+  
+  return episodes;
+}
+
+// 保存剧集数据 - 高性能版本
+async function saveEpisodesData(videoId, safeData, videoDetail) {
+  const startTime = Date.now();
+  
+  try {
+    // 检查缓存
+    const cacheKey = `episodes_${videoId}`;
+    if (episodeCache.has(cacheKey)) {
+      const cached = episodeCache.get(cacheKey);
+      if (cached.timestamp > Date.now() - 10 * 60 * 1000) {
+        return true;
+      }
+    }
+
+    const episodes = prepareEpisodesData(videoId, safeData, videoDetail);
+    
+    if (episodes.length === 0) {
+      episodes.push({
+        episodeId: safeData.pID,
+        episodeName: safeData.videoType === 'movie' ? '正片' : '第1集',
+        episodeIndex: 1
+      });
+    }
+    
+    // 准备批量插入数据
+    const episodesData = episodes.map(episode => ({
+      video_id: videoId,
+      episode_id: episode.episodeId,
+      episode_name: episode.episodeName,
+      episode_index: episode.episodeIndex
+    }));
+    
+    // 使用优化的批量插入
+    const result = await batchInsertEpisodes(episodesData);
+    
+    if (result.success > 0) {
+      episodeCache.set(cacheKey, { timestamp: Date.now() });
+      const duration = Date.now() - startTime;
+      console.log(`🎬 保存剧集: ${result.success} 个 (${duration}ms)`);
+      return true;
+    }
+    
+    return false;
+    
+  } catch (error) {
+    console.error('❌ 保存剧集失败:', error.message);
+    return false;
+  }
+}
+
 // 批量处理视频数据 - 优化版本
 export async function processVideoBatch(videoList, categoryId) {
+  const startTime = Date.now();
   const results = {
     total: videoList.length,
     success: 0,
@@ -753,15 +632,13 @@ export async function processVideoBatch(videoList, categoryId) {
         results.success++;
         results.details.push({
           name: videoData.name,
-          status: 'success',
-          message: '保存成功'
+          status: 'success'
         });
       } else {
         results.failed++;
         results.details.push({
           name: videoData.name,
-          status: 'failed',
-          message: '保存失败'
+          status: 'failed'
         });
       }
     } catch (error) {
@@ -771,23 +648,16 @@ export async function processVideoBatch(videoList, categoryId) {
         status: 'error',
         message: error.message
       });
-      console.error(`❌ 处理视频失败 ${videoData.name}:`, error.message);
     }
     
     // 显示进度
-    if ((i + 1) % 10 === 0 || i === videoList.length - 1) {
+    if ((i + 1) % 5 === 0 || i === videoList.length - 1) {
       console.log(`📊 处理进度: ${i + 1}/${videoList.length}, 成功: ${results.success}, 失败: ${results.failed}`);
     }
   }
   
-  console.log(`🎉 批量处理完成: 成功 ${results.success}/${results.total}, 失败 ${results.failed}`);
+  const totalDuration = Date.now() - startTime;
+  console.log(`🎉 批量处理完成: 成功 ${results.success}/${results.total}, 失败 ${results.failed} (总耗时: ${totalDuration}ms)`);
+  
   return results;
 }
-
-// 导出其他工具函数
-export {
-  checkVideoExists,
-  shouldUpdateVideo,
-  prepareVideoData,
-  getVideoBindParams
-};
