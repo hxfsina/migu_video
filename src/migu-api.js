@@ -464,35 +464,33 @@ function calculateTotalEpisodes(videoData) {
 }
 
 // 准备视频数据 - 修正版本：detail是总简介
+// 在 prepareVideoData 函数中修正数据来源
 function prepareVideoData(videoData, categoryId, videoDetail = null) {
   // 智能判断视频类型
   const videoType = determineVideoType(videoData, categoryId);
   
-  // 使用详情数据中的信息（如果可用）
-  const detailInfo = videoDetail || {};
-  const mainData = videoDetail?.datas?.[0] || videoData;
-
   const safeData = {
     pID: videoData.pID || 'unknown_' + Date.now(),
-    name: mainData.name || '未知名称',
-    subTitle: mainData.subTitle || '',
-    pics: mainData.pics || videoData.pics || {},
-    programType: mainData.programType || videoData.programType || '',
-    score: detailInfo.score || videoData.score || '',
-    year: detailInfo.year || videoData.year || '',
-    area: detailInfo.area || videoData.mediaArea || videoData.area || '',
-    language: detailInfo.language || videoData.language || '',
-    director: (detailInfo.director || videoData.director || '').trim(),
-    actor: (detailInfo.actor || videoData.actor || '').trim(),
-    contentStyle: (detailInfo.contentStyle || videoData.contentStyle || '').trim(),
+    // 🔥 所有基本信息都使用查询API的数据
+    name: videoData.name || '未知名称',
+    subTitle: videoData.subTitle || '',
+    pics: videoData.pics || {},
+    programType: videoData.programType || '',
+    score: videoData.score || '',
+    year: videoData.year || '',
+    area: videoData.mediaArea || videoData.area || '',
+    language: videoData.language || '',
+    director: (videoData.director || '').trim(),
+    actor: (videoData.actor || '').trim(),
+    contentStyle: (videoData.contentStyle || '').trim(),
     updateEP: videoData.updateEP || '',
     recommendation: videoData.recommendation || [],
     publishTime: videoData.publishTime || '',
-    way: mainData.way || videoData.way || '',
-    auth: mainData.auth || videoData.auth || '',
+    way: videoData.way || '',
+    auth: videoData.auth || '',
     contDisplayName: videoData.contDisplayName || '',
     contentType: videoData.contentType || '',
-    assetId: mainData.assetID || videoData.assetID || videoData.assetId || '',
+    assetId: videoData.assetID || videoData.assetId || '',
     publishTimestamp: videoData.publishTimestamp || '',
     sourcePublishTime: videoData.publishTime || '',
     sourcePublishTimestamp: videoData.publishTimestamp || '',
@@ -500,30 +498,29 @@ function prepareVideoData(videoData, categoryId, videoDetail = null) {
     videoType: videoType,
     totalEpisodes: calculateTotalEpisodes(videoData),
     
-    // 🔥 重要修正：detail 是整个视频的总简介，不是每集的简介
-    detail: detailInfo.detail || '', // 使用顶层的detail，这是总简介
+    // 🔥 只有总简介从详情API获取
+    detail: videoDetail?.detail || '',
     
     // 关键词和播放类型
-    wcKeyword: mainData.KEYWORDS || videoData.wcKeyword || '',
-    playType: mainData.playType || videoData.playType || '',
+    wcKeyword: videoData.wcKeyword || '',
+    playType: videoData.playType || '',
 
     // 时间相关
     createTime: videoData.createTime || '',
     publishDate: videoData.publishDate || 0,
 
     // 付费类型字段
-    tipCode: mainData.tip?.code || videoData.tip?.code || '',
-    tipMsg: mainData.tip?.msg || videoData.tip?.msg || '',
-    storeTipCode: mainData.storeTip?.code || videoData.storeTip?.code || '',
-    storeTipMsg: mainData.storeTip?.msg || videoData.storeTip?.msg || '',
+    tipCode: videoData.tip?.code || '',
+    tipMsg: videoData.tip?.msg || '',
+    storeTipCode: videoData.storeTip?.code || '',
+    storeTipMsg: videoData.storeTip?.msg || '',
     
     // 额外数据
     extraData: videoData.extraData || {}
   };
 
   console.log(`📊 视频数据: ${safeData.name}`);
-  console.log(`  类型: ${safeData.videoType}, 地区: "${safeData.area}", 评分: ${safeData.score}, 集数: ${safeData.totalEpisodes}`);
-  console.log(`  详情长度: ${safeData.detail ? safeData.detail.length : 0} 字符`);
+  //console.log(`  类型: ${safeData.videoType}, 地区: "${safeData.area}", 评分: ${safeData.score}, 集数: ${safeData.totalEpisodes}`);
 
   return safeData;
 }
