@@ -6,16 +6,17 @@ async function fullSyncAllCategories() {
   
   // 直接写死：0=全量，1=测试，其他数字=限制页数
   const pageLimit = 0; // 0=全量同步所有页面，1=测试模式(1页)，5=最多5页
+  const startPage = 13; // 从第13页开始
   const delayMs = 2000;
   
   // 根据 pageLimit 决定同步模式
   let syncMode = '';
   if (pageLimit === 0) {
-    syncMode = '全量模式(所有页面)';
+    syncMode = `全量模式(从第${startPage}页开始)`;
   } else if (pageLimit === 1) {
-    syncMode = '测试模式(每类1页)';
+    syncMode = `测试模式(从第${startPage}页开始，1页)`;
   } else {
-    syncMode = `限制模式(最多${pageLimit}页)`;
+    syncMode = `限制模式(从第${startPage}页开始，最多${pageLimit}页)`;
   }
   
   console.log(`🚀 开始全量同步所有分类数据 - ${syncMode}`);
@@ -47,13 +48,13 @@ async function fullSyncAllCategories() {
     `, [cid]);
     
     try {
-      let currentPage = 1;
+      let currentPage = startPage; // 从指定页面开始
       let categoryVideos = 0;
       let hasMoreData = true;
       
       while (hasMoreData) {
         // 检查页数限制
-        if (pageLimit > 0 && currentPage > pageLimit) {
+        if (pageLimit > 0 && currentPage > startPage + pageLimit - 1) {
           console.log(`⏹️  达到页数限制 ${pageLimit} 页，停止同步`);
           break;
         }
@@ -89,14 +90,14 @@ async function fullSyncAllCategories() {
         }
       }
       
-      const totalPagesForCategory = currentPage - 1;
+      const totalPagesForCategory = currentPage - startPage; // 实际同步的页数
       
       await executeSQL(`
         UPDATE sync_status 
         SET status = 'completed', last_page = ?, total_videos = ?, 
             total_pages = ?, last_sync = datetime('now')
         WHERE category_id = ?
-      `, [totalPagesForCategory, categoryVideos, totalPagesForCategory, cid]);
+      `, [currentPage - 1, categoryVideos, totalPagesForCategory, cid]);
       
       successCount++;
       totalVideos += categoryVideos;
