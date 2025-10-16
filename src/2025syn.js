@@ -120,7 +120,7 @@ async function incrementalSync2025Videos() {
         console.log(`📄 检查分类 ${categoryName} 第 ${currentPage} 页 - 2025年`);
         
         // 🔥 使用带重试机制的获取函数
-        const videos = await fetchMiguCategoryWithRetry(cid, currentPage, 20, { mediaYear: '2025' });
+        const videos = await fetchMiguCategoryWithRetry(cid, currentPage, 50, { mediaYear: '2025' });
         
         // 如果没有数据或数据为空，停止同步
         if (!videos || videos.length === 0) {
