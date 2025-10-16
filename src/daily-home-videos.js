@@ -1,4 +1,4 @@
-// ./src/daily-home-videos.js - 每日自动更新首页推荐视频和完整视频信息
+// ./src/daily-home-videos.js - 简化版本
 import fetch from 'node-fetch';
 import { executeSQL, checkEnv } from './db.js';
 import { saveVideoData } from './migu-api.js';
@@ -95,121 +95,34 @@ async function saveHomeVideo(item, index) {
   }
 }
 
-// 检查视频是否需要更新（智能增量更新逻辑）
-function checkIfVideoNeedsUpdate(videoData, existingVideo) {
-  const newUpdateEP = videoData.updateEP || '';
-  const existingUpdateEP = existingVideo.update_ep || '';
-  
-  // 1. 如果剧集已完结，不需要更新
-  if (isSeriesCompleted(newUpdateEP)) {
-    return false;
-  }
-  
-  // 2. 如果剧集还在更新中，检查集数信息是否变化
-  if (isSeriesUpdating(newUpdateEP)) {
-    // 检查集数信息是否变化
-    if (newUpdateEP !== existingUpdateEP) {
-      return true;
-    }
-    
-    // 检查总集数是否变化
-    const newTotalEpisodes = calculateTotalEpisodes(videoData);
-    const existingTotalEpisodes = existingVideo.total_episodes;
-    
-    if (newTotalEpisodes !== existingTotalEpisodes) {
-      return true;
-    }
-    
-    return false;
-  }
-  
-  // 3. 其他情况（可能是电影等非剧集类）
-  const newTotalEpisodes = calculateTotalEpisodes(videoData);
-  
-  if (newUpdateEP !== existingUpdateEP || newTotalEpisodes !== existingVideo.total_episodes) {
-    return true;
-  }
-  
-  return false;
-}
-
-// 判断剧集是否已完结
-function isSeriesCompleted(updateEP) {
-  if (!updateEP) return false;
-  const completedKeywords = ['全集', '已完结', '集全', '全'];
-  return completedKeywords.some(keyword => updateEP.includes(keyword));
-}
-
-// 判断剧集是否在更新中
-function isSeriesUpdating(updateEP) {
-  if (!updateEP) return false;
-  const updatingKeywords = ['更新', '更新至', '连载', '热播'];
-  return updatingKeywords.some(keyword => updateEP.includes(keyword));
-}
-
-// 计算总集数
-function calculateTotalEpisodes(videoData) {
-  const updateEP = videoData.updateEP || '';
-  
-  if (updateEP.includes('集全')) {
-    const match = updateEP.match(/(\d+)集全/);
-    return match ? parseInt(match[1]) : 1;
-  } else if (updateEP.includes('更新至')) {
-    const match = updateEP.match(/更新至(\d+)集/);
-    return match ? parseInt(match[1]) : 1;
-  } else if (updateEP && /\d+集/.test(updateEP)) {
-    const match = updateEP.match(/(\d+)集/);
-    return match ? parseInt(match[1]) : 1;
-  }
-  
-  return 1;
-}
-
-// 🔥 智能增量保存完整视频信息到主表
+// 🔥 直接使用 migu-api.js 的保存逻辑
 async function saveFullVideoData(videoData) {
   try {
     const contDisplayType = videoData.contDisplayType || '';
     if (!contDisplayType) {
       console.log(`⚠️ 跳过视频 ${videoData.name}: 无分类信息`);
-      return { saved: false, type: 'skip', reason: '无分类信息' };
+      return false;
     }
     
     const videoId = videoData.pID;
     if (!videoId) {
       console.log(`⚠️ 跳过视频 ${videoData.name}: 无视频ID`);
-      return { saved: false, type: 'skip', reason: '无视频ID' };
+      return false;
     }
     
-    // 检查视频是否已存在
-    const existingResult = await executeSQL(
-      'SELECT p_id, update_ep, total_episodes FROM videos WHERE p_id = ?',
-      [videoId]
-    );
+    // 直接调用 migu-api.js 的保存逻辑
+    const success = await saveVideoData(videoData, contDisplayType);
     
-    const existingVideo = existingResult?.result?.[0]?.results?.[0];
-    const isNewVideo = !existingVideo;
-
-    if (isNewVideo) {
-      // 新视频 - 完整保存
-      await saveVideoData(videoData, contDisplayType);
-      console.log(`🆕 [首页] 新增视频: ${videoData.name}`);
-      return { saved: true, type: 'new', videoId };
+    if (success) {
+      console.log(`✅ [首页] 视频保存成功: ${videoData.name}`);
     } else {
-      // 已存在视频 - 检查是否需要更新
-      const needsUpdate = checkIfVideoNeedsUpdate(videoData, existingVideo);
-      
-      if (needsUpdate) {
-        await saveVideoData(videoData, contDisplayType);
-        console.log(`🔄 [首页] 更新视频: ${videoData.name}`);
-        return { saved: true, type: 'updated', videoId };
-      } else {
-        console.log(`📋 [首页] 视频无需更新: ${videoData.name}`);
-        return { saved: false, type: 'no_change', videoId };
-      }
+      console.log(`❌ [首页] 视频保存失败: ${videoData.name}`);
     }
+    
+    return success;
   } catch (error) {
     console.error(`❌ [首页] 保存完整视频失败 ${videoData.name}:`, error.message);
-    return { saved: false, type: 'error', reason: error.message, videoId: videoData.pID };
+    return false;
   }
 }
 
@@ -225,21 +138,19 @@ async function dailyUpdateHomeVideos() {
   
   if (videos.length === 0) {
     console.log('❌ 没有获取到首页视频数据，任务终止');
-    return;
+    return false;
   }
   
   // 清除表中原有数据
   const clearSuccess = await clearHomeVideos();
   if (!clearSuccess) {
     console.log('❌ 清除数据失败，任务终止');
-    return;
+    return false;
   }
   
   let homeSuccessCount = 0;
   let homeFailCount = 0;
-  let fullNewCount = 0;
-  let fullUpdatedCount = 0;
-  let fullNoChangeCount = 0;
+  let fullSuccessCount = 0;
   let fullFailCount = 0;
   
   // 保存所有视频（最多20个）
@@ -259,46 +170,35 @@ async function dailyUpdateHomeVideos() {
       homeFailCount++;
     }
     
-    // 2. 🔥 智能增量保存完整视频信息到主表和剧集表
-    const fullResult = await saveFullVideoData(video);
-    if (fullResult.saved) {
-      if (fullResult.type === 'new') fullNewCount++;
-      if (fullResult.type === 'updated') fullUpdatedCount++;
-      if (fullResult.type === 'no_change') fullNoChangeCount++;
+    // 2. 🔥 直接使用 migu-api.js 的保存逻辑
+    const fullSuccess = await saveFullVideoData(video);
+    if (fullSuccess) {
+      fullSuccessCount++;
     } else {
-      if (fullResult.type === 'error') fullFailCount++;
-      // skip 类型不计入失败
+      fullFailCount++;
     }
   }
   
   console.log(`\n🎊 每日更新完成!`);
-  console.log(`📊 首页视频表:`);
-  console.log(`   ✅ 成功保存: ${homeSuccessCount} 个视频`);
-  console.log(`   ❌ 保存失败: ${homeFailCount} 个视频`);
-  console.log(`📊 完整视频信息:`);
-  console.log(`   🆕 新增视频: ${fullNewCount} 个`);
-  console.log(`   🔄 更新视频: ${fullUpdatedCount} 个`);
-  console.log(`   📋 无需更新: ${fullNoChangeCount} 个`);
-  console.log(`   ❌ 保存失败: ${fullFailCount} 个`);
+  console.log(`📊 首页视频表: 成功 ${homeSuccessCount} 个, 失败 ${homeFailCount} 个`);
+  console.log(`📊 完整视频信息: 成功 ${fullSuccessCount} 个, 失败 ${fullFailCount} 个`);
   
-  // 统计结果
   const homeResult = await executeSQL('SELECT COUNT(*) as count FROM home_videos');
-  let homeCount = 0;
-  if (homeResult && homeResult.result && homeResult.result[0] && homeResult.result[0].results && homeResult.result[0].results[0]) {
-    homeCount = homeResult.result[0].results[0].count;
-  }
+  const homeCount = homeResult?.result?.[0]?.results?.[0]?.count || 0;
   
   const videoResult = await executeSQL('SELECT COUNT(*) as count FROM videos');
-  let videoCount = 0;
-  if (videoResult && videoResult.result && videoResult.result[0] && videoResult.result[0].results && videoResult.result[0].results[0]) {
-    videoCount = videoResult.result[0].results[0].count;
-  }
+  const videoCount = videoResult?.result?.[0]?.results?.[0]?.count || 0;
   
-  console.log(`\n📈 数据库统计:`);
-  console.log(`   📱 首页视频表数量: ${homeCount}`);
-  console.log(`   🎬 主视频表数量: ${videoCount}`);
+  console.log(`\n📈 数据库统计: 首页视频 ${homeCount} 个, 主视频 ${videoCount} 个`);
   console.log(`⏰ 下次更新: 明天 03:00`);
+  
+  return homeSuccessCount > 0;
 }
 
-// 执行更新
-dailyUpdateHomeVideos().catch(console.error);
+// 导出函数供其他模块使用
+export { dailyUpdateHomeVideos };
+
+// 如果直接运行此文件，则执行更新
+if (import.meta.url === `file://${process.argv[1]}`) {
+  dailyUpdateHomeVideos().catch(console.error);
+}
