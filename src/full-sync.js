@@ -47,7 +47,7 @@ async function fullSyncAllCategories() {
     `, [cid]);
     
     try {
-      let currentPage = 1;
+      let currentPage = 10;
       let categoryVideos = 0;
       let hasMoreData = true;
       
