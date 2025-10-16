@@ -267,16 +267,15 @@ async function shouldUpdateVideo(existingVideo, newData) {
 }
 
 // 保存剧集数据 - 修正版本：detail是总简介，不是每集简介
-// 在 saveEpisodesData 函数中，修改剧集保存逻辑：
-
 // 保存剧集数据 - 简化版本：不需要每集的detail
+// 保存剧集数据 - 简化版本：先删除所有旧剧集，再插入新剧集
 async function saveEpisodesData(videoId, safeData, videoDetail) {
   try {
     let episodes = [];
     const videoPid = safeData.pID;
     const videoType = safeData.videoType;
     
-  //  console.log(`🎬 处理剧集: ${safeData.name}, 类型: ${videoType}`);
+    console.log(`🎬 处理剧集: ${safeData.name}, 类型: ${videoType}`);
     
     // 从详情数据获取剧集信息
     if (videoDetail && videoDetail.datas && Array.isArray(videoDetail.datas)) {
@@ -297,7 +296,7 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
     // 从 extraData.episodes 获取剧集ID
     else if (safeData.extraData && safeData.extraData.episodes && Array.isArray(safeData.extraData.episodes)) {
       const episodeIds = safeData.extraData.episodes;
-   //   console.log(`📋 从extraData获取 ${episodeIds.length} 个剧集ID`);
+      console.log(`📋 从extraData获取 ${episodeIds.length} 个剧集ID`);
       
       episodes = episodeIds.map((episodeId, index) => {
         let episodeName = `第${index + 1}集`;
@@ -346,43 +345,31 @@ async function saveEpisodesData(videoId, safeData, videoDetail) {
     
     console.log(`📝 准备保存 ${episodes.length} 个剧集`);
     
-    // 保存剧集到数据库 - 只保存基本信息
+    // 🔥 简化：先删除该视频的所有旧剧集
+    console.log(`🗑️  删除视频 ${videoId} 的所有旧剧集`);
+    await executeSQL(
+      'DELETE FROM episodes WHERE video_id = ?',
+      [videoId]
+    );
+    
+    // 🔥 简化：重新插入所有新剧集
     let savedCount = 0;
     for (const episode of episodes) {
       try {
-        // 检查剧集是否已存在
-        const existingEpisode = await executeSQL(
-          'SELECT id FROM episodes WHERE video_id = ? AND episode_id = ?',
-          [videoId, episode.episodeId]
-        );
-        
-        if (existingEpisode && existingEpisode.result && existingEpisode.result[0] && existingEpisode.result[0].results && existingEpisode.result[0].results.length > 0) {
-          // 更新现有剧集
-          await executeSQL(`
-            UPDATE episodes SET
-              episode_name = ?, episode_index = ?, updated_at = datetime('now')
-            WHERE video_id = ? AND episode_id = ?
-          `, [
-            episode.episodeName,
-            episode.episodeIndex,
-            videoId,
-            episode.episodeId
-          ]);
-        } else {
-          // 新增剧集
-          await executeSQL(`
-            INSERT INTO episodes 
-            (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
-            VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-          `, [
-            videoId,
-            episode.episodeId,
-            episode.episodeName,
-            episode.episodeIndex
-          ]);
-        }
+        // 新增剧集
+        await executeSQL(`
+          INSERT INTO episodes 
+          (video_id, episode_id, episode_name, episode_index, created_at, updated_at)
+          VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+        `, [
+          videoId,
+          episode.episodeId,
+          episode.episodeName,
+          episode.episodeIndex
+        ]);
         
         savedCount++;
+        console.log(`✅ 新增剧集: ${episode.episodeName}`);
       } catch (episodeError) {
         console.error(`❌ 保存剧集失败 ${episode.episodeName}:`, episodeError.message);
       }
