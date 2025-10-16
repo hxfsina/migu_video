@@ -22,7 +22,7 @@ async function fullSyncAllCategories() {
   
   // 所有6个分类
   //const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
-  const allCategories = ['1000', '1001'];
+  const allCategories = ['1001'];
   const categoryNames = {
     '1000': '电影',
     '1001': '电视剧', 
