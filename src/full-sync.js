@@ -1,12 +1,39 @@
 import { executeSQL, checkEnv } from './db.js';
 import { fetchMiguCategory, saveVideoData } from './migu-api.js';
 
+async function fetchMiguCategoryWithRetry(cid, page, pageSize, filters = {}, maxRetries = 3) {
+  let retryCount = 0;
+  
+  while (retryCount < maxRetries) {
+    try {
+      const videos = await fetchMiguCategory(cid, page, pageSize, filters);
+      return videos;
+    } catch (error) {
+      retryCount++;
+      console.log(`❌ 第 ${retryCount} 次重试获取分类 ${cid} 第 ${page} 页数据失败:`, error.message);
+      
+      if (retryCount >= maxRetries) {
+        console.log(`⏹️  达到最大重试次数 ${maxRetries}，放弃获取`);
+        return [];
+      }
+      
+      // 指数退避延迟：2秒, 4秒, 8秒...
+      const delay = 2000 * Math.pow(2, retryCount - 1);
+      console.log(`⏳ 等待 ${delay}ms 后重试...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  return [];
+}
+
 async function fullSyncAllCategories() {
   checkEnv();
   
   // 直接写死：0=全量，1=测试，其他数字=限制页数
   const pageLimit = 0; // 0=全量同步所有页面，1=测试模式(1页)，5=最多5页
   const delayMs = 2000;
+  const maxRetries = 3; // 最大重试次数
   
   // 根据 pageLimit 决定同步模式
   let syncMode = '';
@@ -19,6 +46,7 @@ async function fullSyncAllCategories() {
   }
   
   console.log(`🚀 开始全量同步所有分类数据 - ${syncMode}`);
+  console.log(`🔄 重试机制: 最多 ${maxRetries} 次`);
   
   // 所有6个分类
   //const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
@@ -47,7 +75,7 @@ async function fullSyncAllCategories() {
     `, [cid]);
     
     try {
-      let currentPage = 10;
+      let currentPage = 15;
       let categoryVideos = 0;
       let hasMoreData = true;
       
@@ -60,7 +88,8 @@ async function fullSyncAllCategories() {
         
         console.log(`📄 同步分类 ${categoryName} 第 ${currentPage} 页`);
         
-        const videos = await fetchMiguCategory(cid, currentPage, 50);
+        // 使用带重试机制的获取函数
+        const videos = await fetchMiguCategoryWithRetry(cid, currentPage, 50, {}, maxRetries);
         
         // 如果没有数据或数据为空，停止同步
         if (!videos || videos.length === 0) {
