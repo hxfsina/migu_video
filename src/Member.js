@@ -66,7 +66,7 @@ async function incrementalSyncMemberVideos() {
         console.log(`📄 检查分类 ${categoryName} 第 ${currentPage} 页 - 会员视频`);
         
         // 🔥 使用带重试机制的获取函数，筛选会员视频
-        const videos = await fetchMiguCategoryWithRetry(cid, currentPage, 20, { payType: '2' });
+        const videos = await fetchMiguCategoryWithRetry(cid, currentPage, 50, { payType: '2' });
         
         // 如果没有数据或数据为空，停止同步
         if (!videos || videos.length === 0) {
