@@ -2,12 +2,22 @@
   "sites": [
     {
       "key": "miguvideo",
-      "name": "咪咕视频",
+      "name": "📺 ‖ 咪咕视频",
       "type": 3,
       "api": "https://miguvideo.hxfrock.ggff.net/migu_web.py",
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1
+    },
+    {
+      "key": "apple",
+      "name": "🍎 ‖ 小苹果",
+      "type": 3,
+      "api": "https://miguepg.hxfkof88.dpdns.org/Apple.py",
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 1
     }
   ]
 }
+
