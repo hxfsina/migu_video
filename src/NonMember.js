@@ -33,8 +33,8 @@ async function incrementalSyncNonMemberVideos() {
   console.log('🎯 开始增量同步非会员视频数据');
   console.log(`🔄 重试机制: 最多 3 次`);
   
-  //const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
-  const allCategories = ['601382'];
+  const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
+  
   const categoryNames = {
     '1000': '电影', '1001': '电视剧', '1005': '综艺',
     '1002': '纪实', '1007': '动漫', '601382': '少儿'
@@ -59,7 +59,7 @@ async function incrementalSyncNonMemberVideos() {
     `, [cid]);
     
     try {
-      let currentPage = 10;
+      let currentPage = 1;
       let hasMoreData = true;
       let categoryNew = 0;
       let categoryUpdated = 0;
