@@ -74,7 +74,7 @@ async function incrementalSyncNonMemberVideos() {
         // 🔥 关键修改：分别获取不同付费类型的视频，然后合并（带重试）
         for (const payType of nonMemberPayTypes) {
           try {
-            const videos = await fetchMiguCategoryWithRetry(cid, currentPage, 20, { payType });
+            const videos = await fetchMiguCategoryWithRetry(cid, currentPage, 50, { payType });
             if (videos && videos.length > 0) {
               allVideos = allVideos.concat(videos);
               console.log(`  ✅ payType=${payType}: 获取到 ${videos.length} 个视频`);
