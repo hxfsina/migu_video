@@ -525,11 +525,8 @@ function getVideoBindParams(safeData) {
 
   const recommendationJson = JSON.stringify(safeData.recommendation);
   
-  const extraDataJson = JSON.stringify({
-    detail: safeData.detail, // 总简介也保存在extra_data中备份
-    episodes: safeData.extraData.episodes || [],
-    episodeList: safeData.extraData.episodeList || []
-  });
+  // 🔥 完全移除 extra_data，使用空对象
+  const extraDataJson = JSON.stringify({});
 
   return [
     safeData.pID,                       // 1. p_id
@@ -560,7 +557,7 @@ function getVideoBindParams(safeData) {
     safeData.publishTime,               // 26. publish_time
     safeData.publishTimestamp,          // 27. publish_timestamp
     recommendationJson,                 // 28. recommendation
-    extraDataJson,                      // 29. extra_data
+    extraDataJson,                      // 29. extra_data (现在为空对象)
     safeData.sourcePublishTime,         // 30. source_publish_time
     safeData.sourcePublishTimestamp,    // 31. source_publish_timestamp
     safeData.videoType,                 // 32. video_type
