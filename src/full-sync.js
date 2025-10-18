@@ -49,8 +49,7 @@ async function fullSyncAllCategories() {
   console.log(`🔄 重试机制: 最多 ${maxRetries} 次`);
   
   // 所有6个分类
-  //const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
-  const allCategories = ['1001'];
+  const allCategories = ['1000', '1001', '1005', '1002', '1007', '601382'];
   const categoryNames = {
     '1000': '电影',
     '1001': '电视剧', 
@@ -75,7 +74,7 @@ async function fullSyncAllCategories() {
     `, [cid]);
     
     try {
-      let currentPage = 15;
+      let currentPage = 1;
       let categoryVideos = 0;
       let hasMoreData = true;
       
