@@ -76,7 +76,7 @@ class Spider(Spider):
         # 返回错误视频地址
         return {
             'parse': 0,
-            'url': 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/mp4/xgplayer-demo-720p.mp4',
+            'url': '',
             'header': {},
             'jx': 0
         }
@@ -92,4 +92,5 @@ class Spider(Spider):
         """首页推荐视频"""
         print("获取首页推荐视频")
         result = self._call_api('homeVideo')
+
         return result or {'list': []}
